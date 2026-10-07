@@ -33,7 +33,7 @@ O que a v3.6.0 não consegue resolver sozinha são três causas externas que só
 | Causa | Correção |
 |---|---|
 | `Salvar contato` (1 leitura + 1 escrita no Sheets) rodava **antes** de responder | Passou a rodar depois do envio, junto com a gravação do CRM. |
-| `Ler log recente` lê a aba **LOG_ATENDIMENTOS inteira** a cada mensagem para montar 30 minutos de histórico. A aba cresce 1 linha por mensagem, com textos longos; quanto mais uso, mais lento. | Script `scripts/arquivar_log_atendimentos.gs` move linhas com mais de 30 dias para a aba `LOG_ARQUIVO` (gatilho diário). Mantém a aba de trabalho pequena sem perder histórico. |
+| `Ler log recente` lê a aba **LOG_ATENDIMENTOS inteira** a cada mensagem para montar 30 minutos de histórico. A aba cresce 1 linha por mensagem, com textos longos; quanto mais uso, mais lento. | Script `scripts/setup_crm_planilha.gs` (substitui o setup antigo) move linhas com mais de 30 dias para a aba `LOG_ARQUIVO` (gatilho diário) e o DASHBOARD_CRM passa a somar as duas abas. Mantém a aba de trabalho pequena sem perder histórico. |
 | Chamadas HTTP sem timeout | Timeouts definidos: Meta 20 s (URL) e 60 s (download), OpenAI 30 a 90 s conforme o nó. |
 | Chamadas à OpenAI sem retentativa em 429/5xx | 2 tentativas com 2 s de intervalo nos nós de chat, visão e TTS. |
 | `Wait - Anti-spam 2s` | Mantido. São 2 s fixos em toda resposta; se quiser ganhar tempo, reduza para 1. |

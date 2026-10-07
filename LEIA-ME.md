@@ -12,7 +12,7 @@ workflows/
 docs/
   ANALISE_E_CORRECOES_v3.6.0.md       <- diagnóstico completo, checklist e prazos da OpenAI
 scripts/
-  arquivar_log_atendimentos.gs        <- Apps Script: mantém a aba LOG_ATENDIMENTOS pequena
+  setup_crm_planilha.gs               <- Apps Script único: colunas, dashboard e arquivamento do LOG
 ```
 
 ## Como publicar a v3.6.0 (sem terminal)
@@ -20,7 +20,7 @@ scripts/
 1. No n8n, **Workflows > Import from File** e escolha `workflows/WhatsApp_IA_CECAPE_v3.6.0.json`.
 2. Abra os nós com credencial e confirme que estão selecionadas: WhatsApp account (nós WhatsApp e Mídia), OpenAI - CECAPE - New (nós OpenAI/IA), Google Sheets account 2 (nós Google Sheets). O nó novo `WhatsApp - Aviso de erro ao usuário` usa a mesma credencial do WhatsApp.
 3. Salve. **Desative** o workflow v3.5.7 (mesmo path `whatsapp-cecape-prod`). Ative o v3.6.0.
-4. Na planilha oficial, Extensões > Apps Script: cole `scripts/arquivar_log_atendimentos.gs` e execute `criarGatilhoDiario` uma vez.
+4. Na planilha oficial, Extensões > Apps Script: substitua o script antigo por `scripts/setup_crm_planilha.gs`, execute `setupCRM` e depois `criarGatilhoDiario` uma vez.
 5. Faça os testes da seção 6 de `docs/ANALISE_E_CORRECOES_v3.6.0.md`.
 
 ## O que mudou na v3.6.0
