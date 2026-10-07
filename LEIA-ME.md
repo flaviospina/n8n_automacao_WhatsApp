@@ -6,9 +6,10 @@ Workflow do atendimento automático do CECAPE via WhatsApp Cloud API, com Agente
 
 ```
 workflows/
-  WhatsApp_IA_CECAPE_v3.6.2.json      <- versão atual (importar esta)
+  WhatsApp_IA_CECAPE_v3.6.3.json      <- versão atual (importar esta)
   anterior/
-    WhatsApp_IA_CECAPE_v3.6.1.json    <- versões anteriores, só para comparação
+    WhatsApp_IA_CECAPE_v3.6.2.json    <- versões anteriores, só para comparação
+    WhatsApp_IA_CECAPE_v3.6.1.json
     WhatsApp_IA_CECAPE_v3.6.0.json
     WhatsApp_IA_CECAPE_v3.5.7.json
 docs/
@@ -17,13 +18,20 @@ scripts/
   setup_crm_planilha.gs               <- Apps Script único: colunas, dashboard e arquivamento do LOG
 ```
 
-## Como publicar a v3.6.2 (sem terminal)
+## Como publicar a v3.6.3 (sem terminal)
 
-1. No n8n, **Workflows > Import from File** e escolha `workflows/WhatsApp_IA_CECAPE_v3.6.2.json`.
+1. No n8n, **Workflows > Import from File** e escolha `workflows/WhatsApp_IA_CECAPE_v3.6.3.json`.
 2. Abra os nós com credencial e confirme que estão selecionadas: WhatsApp account (nós WhatsApp e Mídia), OpenAI - CECAPE - New (nós OpenAI/IA), Google Sheets account 2 (nós Google Sheets). O nó novo `WhatsApp - Aviso de erro ao usuário` usa a mesma credencial do WhatsApp.
-3. Salve. **Desative** qualquer versão anterior (mesmo path `whatsapp-cecape-prod`). Ative o v3.6.2.
+3. Salve. **Desative** qualquer versão anterior (mesmo path `whatsapp-cecape-prod`). Ative o v3.6.3.
 4. Na planilha oficial, Extensões > Apps Script: substitua o script antigo por `scripts/setup_crm_planilha.gs`, execute `setupCRM` e depois `criarGatilhoDiario` uma vez.
 5. Faça os testes da seção 6 de `docs/ANALISE_E_CORRECOES_v3.6.0.md`.
+
+## O que mudou na v3.6.3
+
+- A leitura dos cursos presenciais deixou de usar o nó Google Sheets do n8n e passou a chamar a API diretamente (`values:batchGet`, uma requisição para todos os meses). Motivo: no n8n 2.x o nó devolvia só a primeira linha da aba (bug aberto n8n-io/n8n #39011) e, com aba dinâmica e vários meses, lia sempre a aba do primeiro item (#39784). O nó novo tem o mesmo nome e usa a mesma credencial Google Sheets.
+- Quantidade de cursos de um mês = número de linhas com dados a partir da linha 2. A lista detalhada continua respeitando DIVULGAR = Sim, e o resumo informa os dois números.
+- Coluna `erro` do LOG_ATENDIMENTOS passa a registrar `[diag] aba=...; lidos=N; ativos=M; contexto=K chars` em toda resposta que consultou planilha, para auditar sem abrir a execução.
+- Limite do contexto de cursos: 60 mil caracteres.
 
 ## O que mudou na v3.6.2
 

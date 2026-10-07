@@ -170,7 +170,8 @@ function montarDashboard_(ss) {
     ['📊 DASHBOARD CRM - Atendimento WhatsApp CECAPE', ''],
     ['Totais somam ' + ABA_LOG + ' (últimos ' + DIAS_MANTER + ' dias) + ' + ABA_ARQUIVO + ' (histórico)', ''],
     ['', ''],
-    ['Total de mensagens registradas', '=COUNTA(' + faixaLog('id_mensagem') + ')+COUNTA(' + faixaArq('id_mensagem') + ')'],
+    // data_hora existe em todos os registros (id_mensagem só a partir da v3.5)
+    ['Total de mensagens registradas', '=COUNTA(' + faixaLog('data_hora') + ')+COUNTA(' + faixaArq('data_hora') + ')'],
     // "Respondid*" cobre "Respondida" (v3.5+) e "Respondido" (registros antigos v3.4)
     ['Respondidas', '=' + contaSe('status', '"Respondid*"')],
     ['Pendentes (recebidas sem resposta)', '=' + contaSe('status', '"Recebida"')],
@@ -182,7 +183,7 @@ function montarDashboard_(ss) {
     ['Mensagens nos últimos 7 dias', '=SUMPRODUCT((' + faixaLog('timestamp_recebida') + '<>"")*(IFERROR(DATEVALUE(LEFT(' + faixaLog('timestamp_recebida') + ',10)),0)>=TODAY()-7))'],
     ['Respostas em áudio', '=' + contaSe('formato_resposta', '"áudio"')],
     ['Áudios que caíram em texto (fallback)', '=' + contaSe('formato_resposta', '"texto (fallback TTS)"')],
-    ['Linhas na aba de trabalho (' + ABA_LOG + ')', '=COUNTA(' + faixaLog('id_mensagem') + ')'],
+    ['Linhas na aba de trabalho (' + ABA_LOG + ')', '=COUNTA(' + faixaLog('data_hora') + ')'],
     ['', ''],
     ['Top categorias (histórico completo)', ''],
     ['', '']

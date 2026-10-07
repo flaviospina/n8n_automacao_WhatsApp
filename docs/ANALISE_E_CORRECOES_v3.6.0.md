@@ -133,3 +133,15 @@ Sintoma: "quantos cursos tiveram em setembro?" respondia que não havia cursos, 
 | sem mês | do mês atual até dezembro |
 
 O contexto passa a abrir com `MESES CONSULTADOS` e um `RESUMO` com a quantidade de cursos por mês (contagem de linhas com dados a partir da linha 2, respeitando a coluna DIVULGAR quando existir). O especialista foi instruído a usar esse resumo para perguntas de quantidade e a avisar quando o mês perguntado não estiver entre os consultados. Testes de mesa: 11 frases, todas com as abas esperadas.
+
+## 9. v3.6.3: o nó Google Sheets devolvia só a primeira linha
+
+Evidência (coluna `resposta_enviada` do LOG_ATENDIMENTOS): em junho e julho as respostas sobre cursos listavam de 3 a 6 cursos; em 07/10/2026 todas as respostas, para setembro (35 linhas) e novembro (19 linhas), traziam exatamente 1 curso, sempre o da linha 2. O código do nó `Montar contexto de cursos`, executado fora do n8n com os dados reais da planilha, produz 18 cursos para setembro e 19 para novembro. Logo o nó `Google Sheets - Ler cursos do mês` estava entregando uma única linha.
+
+Dois bugs abertos no n8n 2.x explicam isso: [#39011](https://github.com/n8n-io/n8n/issues/39011) (Get Many devolve só a primeira linha, intermitente, "itens colapsam em 1") e [#39784](https://github.com/n8n-io/n8n/issues/39784) (com nome de aba dinâmico e vários itens de entrada, o nó usa a aba do primeiro item para todos). Também há relato antigo ([#9236](https://github.com/n8n-io/n8n/issues/9236)) de que Retry On Fail é ignorado quando On Error está em "continuar".
+
+Correção: `Calcular mês seguinte` gera um único item com a lista de meses e a URL de `values:batchGet`; `Google Sheets - Ler cursos do mês` virou um nó HTTP Request (mesmo nome, mesma credencial `googleSheetsOAuth2Api`); `Montar contexto de cursos` converte cada `valueRange` em linhas, usando a linha 1 como cabeçalho. Benefícios: 1 requisição por pergunta em vez de 1 por mês, sem depender do nó com bug.
+
+Testes de mesa com a planilha real: setembro → 35 registrados, 18 listados, 12 mil caracteres; outubro+novembro+dezembro → 69 registrados, 66 listados.
+
+Os demais nós Google Sheets (contatos, log, base oficial, corpo docente) continuam no nó nativo. Se o mesmo sintoma aparecer neles (histórico que "esquece", contato não reconhecido, corpo docente com uma pessoa só), a mesma troca por HTTP Request resolve. Confira a versão do n8n em Settings; se for 2.3x, o bug se aplica.
