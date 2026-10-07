@@ -1,0 +1,3086 @@
+{
+  "name": "WhatsApp IA CECAPE - Agente Master Google Sheets v3.5.7 CRM - 100% OK",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## WhatsApp IA CECAPE — Agente Master + Google Sheets v3\n\nEsta versão conecta o Agente Master à planilha oficial.\n\n**Spreadsheet ID:** `1NDC8stBwdhc0yUNZNWNiEKHTrDEq5chQqIRP0WAc2RQ`\n\n### Ajustes após importar\n1. Selecione a credencial em **Google Sheets - Ler base oficial**.\n2. Selecione a credencial em **Google Sheets - Registrar log**.\n3. Selecione a credencial em **WhatsApp - Enviar resposta**.\n4. No node **IA - Agente Especialista**, confirme o header `Authorization`.\n5. Mantenha somente um workflow ativo com o path `/webhook/whatsapp-cecape-prod`.\n\n### Modo diagnóstico\nNo node **CONFIG - Agente Master**, altere `diagnosticMode`.\n- `true`: responde categoria técnica.\n- `false`: consulta Google Sheets e responde normalmente.\n\nPor padrão, esta versão está com `diagnosticMode = false` para testar a base oficial.\n",
+        "height": 620,
+        "width": 700,
+        "color": 4
+      },
+      "id": "88cbfc29-e2db-49cf-bb3f-27581df468f1",
+      "name": "LEIA - Google Sheets v3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -752,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "path": "whatsapp-cecape-prod",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "cbbea242-6081-4097-9f7b-9dee1d56cc13",
+      "name": "Webhook GET - Verificação Meta",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        336
+      ],
+      "webhookId": "whatsapp-cecape-prod-get-v3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validação do Webhook da Meta.\nconst query = $json.query || {};\nconst verifyTokenEsperado = 'cecape_n8n_whatsapp_2026';\nconst mode = query['hub.mode'];\nconst token = query['hub.verify_token'];\nconst challenge = query['hub.challenge'];\n\nif (mode === 'subscribe' && token === verifyTokenEsperado && challenge) {\n  return [{ json: { challenge: String(challenge), statusCode: 200 } }];\n}\nreturn [{ json: { challenge: 'Token de verificação inválido', statusCode: 403 } }];\n"
+      },
+      "id": "2ef7f41c-4b34-4ceb-8df3-8684f1bd0dc6",
+      "name": "Validar GET Meta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.challenge }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode }}"
+        }
+      },
+      "id": "f71f4817-1060-4513-8c74-8ec4752c1b1b",
+      "name": "Responder Verificação Meta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -384,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-cecape-prod",
+        "options": {}
+      },
+      "id": "5692f22e-20b7-4446-8b77-9ddca89debbe",
+      "name": "Webhook POST - Mensagens WhatsApp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        4016
+      ],
+      "webhookId": "whatsapp-cecape-prod-post-v3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai mensagens recebidas do WhatsApp Cloud API.\n// Compatível com Webhook nativo do n8n: payload vem em $json.body.\n// Também trata o evento de TESTE da Meta, que usa números e IDs fictícios.\n\nconst input = $input.first()?.json ?? {};\nconst payload = input.body ?? input;\n\nconst value =\n  payload.entry?.[0]?.changes?.[0]?.value ??\n  payload.value ??\n  payload;\n\nconst changeField =\n  payload.entry?.[0]?.changes?.[0]?.field ??\n  '';\n\nconst message = value.messages?.[0];\nconst contact = value.contacts?.[0] ?? {};\nconst metadata = value.metadata ?? {};\n\nif (!message) {\n  return [];\n}\n\nconst REAL_PHONE_NUMBER_ID = '1068905836312533';\nconst DISPLAY_PHONE_NUMBER = '+55 11 4224-0675';\nconst ADMIN_TEST_RECIPIENT = '5511993358259';\n\nconst messageId = message.id || '';\nconst originalFrom = String(message.from || contact.wa_id || '').replace(/\\D/g, '');\nconst metaPhoneNumberId = String(metadata.phone_number_id || '');\nconst metaDisplayPhone = String(metadata.display_phone_number || '');\n\nconst isMetaTestPayload =\n  metaPhoneNumberId === '123456123' ||\n  metaDisplayPhone === '16505551111' ||\n  originalFrom === '16315551181' ||\n  String(payload.entry?.[0]?.id || '') === '0' ||\n  String(messageId).startsWith('ABGG');\n\nlet from = originalFrom;\nlet phoneNumberId = metaPhoneNumberId || REAL_PHONE_NUMBER_ID;\nlet displayPhoneNumber = metaDisplayPhone || DISPLAY_PHONE_NUMBER;\n\nif (isMetaTestPayload) {\n  from = ADMIN_TEST_RECIPIENT;\n  phoneNumberId = REAL_PHONE_NUMBER_ID;\n  displayPhoneNumber = DISPLAY_PHONE_NUMBER;\n}\n\nconst messageType = message.type || '';\nconst userName = contact.profile?.name || '';\nlet userMessage = '';\n\nif (messageType === 'text') {\n  userMessage = String(message.text?.body || '').trim();\n}\nif (messageType === 'button') {\n  userMessage = String(message.button?.text || message.button?.payload || '').trim();\n}\nif (messageType === 'interactive') {\n  userMessage = String(\n    message.interactive?.button_reply?.title ||\n    message.interactive?.button_reply?.id ||\n    message.interactive?.list_reply?.title ||\n    message.interactive?.list_reply?.id ||\n    ''\n  ).trim();\n}\nif (isMetaTestPayload && !userMessage) {\n  userMessage = 'Olá, o que é o CECAPE?';\n}\nif (!isMetaTestPayload && messageType === 'text' && !userMessage) {\n  return [];\n}\n\nif (!isMetaTestPayload) {\n  const staticData = $getWorkflowStaticData('global');\n  staticData.processedMessages = staticData.processedMessages || {};\n  const dedupeKey = `${messageId}-${originalFrom}-${message.timestamp || ''}`;\n\n  if (dedupeKey && staticData.processedMessages[dedupeKey]) return [];\n  if (dedupeKey) staticData.processedMessages[dedupeKey] = new Date().toISOString();\n\n  const keys = Object.keys(staticData.processedMessages);\n  if (keys.length > 1000) {\n    keys.slice(0, keys.length - 700).forEach(k => delete staticData.processedMessages[k]);\n  }\n}\n\nif (!from) return [];\nif (userMessage.length > 2500) userMessage = userMessage.slice(0, 2500);\n\n// Captura media_id para os tipos que precisam de pré-processamento\n// (áudio transcrito via Whisper, imagem descrita via Vision, vídeo com\n// áudio extraído e transcrito). O texto definitivo (userMessage) só fica\n// pronto depois desse pré-processamento, feito em nós seguintes.\nconst mediaId =\n  message.audio?.id || message.image?.id || message.video?.id || '';\nconst mediaCaption = message.image?.caption || message.video?.caption || '';\n\nreturn [{\n  json: {\n    from,\n    originalFrom,\n    userName,\n    messageType,\n    userMessage,\n    messageId,\n    phoneNumberId,\n    displayPhoneNumber,\n    changeField,\n    isMetaTestPayload,\n    mediaId,\n    mediaCaption,\n    respostaDeveSerAudio: messageType === 'audio',\n    receivedAt: new Date().toISOString(),\n    raw: value\n  }\n}];\n"
+      },
+      "id": "5d205bd7-b673-448c-ad3a-92daf77baf76",
+      "name": "Extrair dados da mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        4016
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v23.0/{{ $json.mediaId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "options": {}
+      },
+      "id": "6e25e454-179d-4cbe-88df-eaad7d4d509d",
+      "name": "Mídia - Obter URL (áudio)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -160,
+        3488
+      ],
+      "credentials": {
+        "whatsAppApi": {
+          "id": "c5A8oh1Pdcce2iix",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Passo 1 da Graph API: o webhook só traz o media_id. Esta chamada retorna a URL temporária assinada do arquivo."
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "4eff9a36-20d8-4f59-8cf6-09fd9e853716",
+      "name": "Mídia - Baixar áudio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        64,
+        3568
+      ],
+      "credentials": {
+        "whatsAppApi": {
+          "id": "c5A8oh1Pdcce2iix",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "model",
+              "value": "whisper-1"
+            },
+            {
+              "name": "language",
+              "value": "pt"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3ebfff5e-57f7-4661-b9ef-e9a0a21c75df",
+      "name": "OpenAI - Transcrever áudio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        512,
+        3648
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yW7EkQI3NtxG318I",
+          "name": "OpenAI - CECAPE - New"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Use a mesma credencial OpenAI (Bearer) já configurada nos outros nós de IA do projeto, em vez do header fixo, se possível — mais seguro que chave em texto puro."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Restaura os dados originais e injeta o texto transcrito (áudio OU vídeo)\n// como userMessage, fazendo a mensagem seguir o MESMO caminho de uma\n// mensagem de texto normal. Se o vídeo veio com legenda (caption), ela é\n// mantida junto, pois costuma conter a pergunta real do usuário.\nconst original = $('Extrair dados da mensagem').first().json;\nconst textoTranscrito = String($json.text || '').trim();\nconst caption = String(original.mediaCaption || '').trim();\nconst tipoOriginal = original.messageType; // 'audio' ou 'video'\n\nlet userMessage = textoTranscrito;\nif (caption && textoTranscrito) {\n  userMessage = `${caption}\\n[transcrição do ${tipoOriginal === 'video' ? 'vídeo' : 'áudio'} enviado]: ${textoTranscrito}`;\n} else if (caption) {\n  userMessage = caption;\n}\n\nreturn [{\n  json: {\n    ...original,\n    userMessage: userMessage || original.userMessage,\n    messageType: 'text',\n    messageTypeOriginal: tipoOriginal\n  }\n}];\n"
+      },
+      "id": "5dd615d0-4aea-479b-98e1-41e566d847ed",
+      "name": "Converter transcrição em texto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        3712
+      ],
+      "notes": "messageType passa a ser 'text' propositalmente, para que o IF - É texto? aceite esta mensagem sem nenhuma alteração nele. messageTypeOriginal preserva o tipo real, usado depois para decidir se a resposta deve voltar em áudio."
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v23.0/{{ $json.mediaId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "options": {}
+      },
+      "id": "0f7970ee-dc5d-4811-9c0a-9b6031cf9cbd",
+      "name": "Mídia - Obter URL (imagem)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -160,
+        4400
+      ],
+      "credentials": {
+        "whatsAppApi": {
+          "id": "c5A8oh1Pdcce2iix",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "5db80088-2e5e-4a38-b77d-bec39d92b736",
+      "name": "Mídia - Baixar imagem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        64,
+        4480
+      ],
+      "credentials": {
+        "whatsAppApi": {
+          "id": "c5A8oh1Pdcce2iix",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'gpt-4o-mini',\n  temperature: 0.2,\n  max_tokens: 500,\n  messages: [\n    {\n      role: 'user',\n      content: [\n        {\n          type: 'text',\n          text: 'Descreva objetivamente esta imagem enviada por um usuário do atendimento do CECAPE (centro de capacitação de profissionais da educação). Se houver texto visível (print de tela, mensagem de erro, certificado, documento), transcreva o conteúdo principal. Responda em português, de forma direta, em no máximo 120 palavras.'\n        },\n        {\n          type: 'image_url',\n          image_url: { url: $json.imageDataUri, detail: 'auto' }\n        }\n      ]\n    }\n  ]\n}) }}",
+        "options": {}
+      },
+      "id": "5c6fa893-cd3a-4c14-82b2-8a9fa18f30e8",
+      "name": "OpenAI - Analisar imagem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        512,
+        4560
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yW7EkQI3NtxG318I",
+          "name": "OpenAI - CECAPE - New"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Restaura os dados originais e injeta a descrição da imagem como userMessage.\n// Se a imagem veio com legenda (caption), ela é mantida junto, pois costuma\n// conter a pergunta real do usuário (ex: \"isso aqui está certo?\" + foto).\nconst original = $('Extrair dados da mensagem').first().json;\nconst descricaoImagem = String($json.choices?.[0]?.message?.content || '').trim();\nconst caption = String(original.mediaCaption || '').trim();\n\nconst userMessage = caption\n  ? `${caption} [imagem enviada: ${descricaoImagem}]`\n  : `[imagem enviada: ${descricaoImagem}]`;\n\nreturn [{\n  json: {\n    ...original,\n    userMessage,\n    messageType: 'text',\n    messageTypeOriginal: 'image'\n  }\n}];\n"
+      },
+      "id": "cdad40d9-8687-4951-83ad-60732171823d",
+      "name": "Converter imagem em texto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        4624
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c4cc817b-fdd1-4d9c-882d-ae6c8c593a9f",
+              "leftValue": "={{ $json.messageType }}",
+              "rightValue": "text",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "044dc60d-7294-42ef-8f6f-580764b5c0ca",
+              "leftValue": "={{ $json.userMessage }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6c30fc50-8d0e-4eba-a12e-58de2cc71c87",
+      "name": "IF - É texto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2304,
+        1872
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configurações gerais do projeto.\n// diagnosticMode = true: retorna a categoria técnica no WhatsApp para homologação.\n// diagnosticMode = false: consulta Google Sheets e responde normalmente.\n\nconst diagnosticMode = false;\nconst spreadsheetId = '1NDC8stBwdhc0yUNZNWNiEKHTrDEq5chQqIRP0WAc2RQ';\n\nconst mensagens = {\n  pergunta_vaga: 'Olá! Para te orientar melhor, sua dúvida é sobre cursos, certificados, inscrições, cronograma, acesso à plataforma ou suporte técnico?',\n  fora_do_escopo: 'Desculpe, eu consigo responder apenas dúvidas relacionadas ao CECAPE, AutoriaSCS, cursos, formações, certificados, inscrições, cronogramas e orientações institucionais.',\n  suporte_humano: 'Essa solicitação precisa de análise da equipe do CECAPE. Por favor, informe seu nome completo, unidade escolar, e-mail institucional e descreva brevemente o problema.',\n  nao_suportado: 'Olá! No momento, este atendimento automático consegue responder apenas mensagens de texto. Por favor, envie sua dúvida por escrito sobre o CECAPE, AutoriaSCS, cursos, formações ou certificados.',\n  sem_informacao: 'Desculpe, não encontrei essa informação na base oficial do CECAPE. Para melhor orientação, entre em contato com a equipe responsável.',\n  erro_seguro: 'No momento, não consegui processar sua solicitação com segurança. Por favor, tente novamente em instantes ou entre em contato com a equipe responsável.'\n};\n\nconst variacaoSeed = Math.random().toString(36).substring(2, 8);\n\n// Período do dia, no horário de São Paulo, para saudações personalizadas.\nconst horaAgora = Number(new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false }));\nlet periodoDoDia;\nif (horaAgora >= 5 && horaAgora < 12) periodoDoDia = 'manha';\nelse if (horaAgora >= 12 && horaAgora < 18) periodoDoDia = 'tarde';\nelse periodoDoDia = 'noite';\n\nreturn [{\n  json: {\n    ...$json,\n    diagnosticMode,\n    spreadsheetId,\n    mensagens,\n    modeloIA: 'gpt-4o-mini',\n    variacaoSeed,\n    periodoDoDia,\n    limiteCaracteresResposta: 3500\n  }\n}];\n"
+      },
+      "id": "eef41e04-942f-49da-ada8-4f1f04fc55f3",
+      "name": "CONFIG - Agente Master",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2528,
+        1808
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'gpt-4o-mini',\n  temperature: 0.1,\n  response_format: { type: 'json_object' },\n  messages: [\n    {\n      role: 'system',\n      content:\n`Você é o classificador de intenções do CECAPE (Centro de Capacitação dos Profissionais da Educação), recebendo mensagens de um atendimento via WhatsApp.\n\nA mensagem do usuário pode ter erros de digitação, abreviações, gírias, falta de acento, ou vir de transcrição de áudio/vídeo (podendo ter erros de reconhecimento de fala). Sua tarefa é interpretar a intenção real, corrigindo esses erros, e devolver APENAS um JSON válido, sem markdown, sem texto fora do JSON, no formato exato:\n\n{\n  \\\"categoria\\\": \\\"<uma das categorias abaixo>\\\",\n  \\\"agente_destino\\\": \\\"<agente correspondente à categoria, ver mapa abaixo>\\\",\n  \\\"confianca\\\": <número de 0 a 1>,\n  \\\"dentro_escopo\\\": <true ou false>,\n  \\\"precisa_humano\\\": <true ou false>,\n  \\\"motivo\\\": \\\"<breve explicação da classificação>\\\",\n  \\\"mensagem_reescrita\\\": \\\"<a pergunta do usuário reescrita de forma clara e correta, preservando 100% da intenção original, sem adicionar informação nova>\\\",\n  \\\"nome_proprio_mencionado\\\": \\\"<nome de pessoa mencionado nesta mensagem OU resolvido via histórico, ou null>\\\",\n  \\\"resposta_direta\\\": \\\"<preencher apenas para pergunta_vaga, fora_do_escopo ou suporte_humano, usando as mensagens fixas fornecidas abaixo; em outros casos deixar string vazia>\\\"\n}\n\nCategorias e respectivos agente_destino:\n- pergunta_vaga -> resposta_pergunta_vaga (saudação ou pedido genérico sem dúvida específica)\n- fora_do_escopo -> resposta_fora_escopo (assunto sem relação com CECAPE: clima, futebol, loteria, saúde, política, finanças pessoais etc.)\n- suporte_humano -> agente_suporte_humano (problema individual: nome/CPF errado, certificado ou inscrição com problema, não consegue acessar conta, login não funciona, e-mail errado, ou pedido explícito de falar com alguém)\n- certificados -> agente_certificados (como obter/baixar/emitir certificado)\n- agenda_cronograma -> agente_agenda_cronograma (data, horário, local, cronograma, link de reunião)\n- inscricoes -> agente_inscricoes (inscrição, vagas, link de inscrição)\n- corpo_docente -> agente_corpo_docente (formador, professor, diretora/direção, coordenação, responsável por curso, área/e-mail/contato de alguém da equipe, ou QUALQUER pergunta sobre uma pessoa que trabalha no CECAPE: \\\"quem é <nome>?\\\", \\\"qual o nome completo de <nome/sobrenome>?\\\", \\\"quem é a diretora?\\\", \\\"tem alguém com sobrenome <X>?\\\")\n- ferramentas_produtos -> agente_ferramentas_produtos (ferramentas, sistemas, produtos institucionais: Classroom, Meet, Jitsi etc.)\n- autoriascs_plataforma -> agente_autoriascs_plataforma (plataforma AutoriaSCS, AVA, EAD, login, senha, acesso à plataforma)\n- cursos_formacoes -> agente_cursos_formacoes (cursos, formações, carga horária, modalidade, público-alvo)\n- institucional_cecape -> agente_institucional_cecape (o que é o CECAPE, endereço, telefone, horário de atendimento institucional)\n\nRegras importantes:\n1. Corrija erros de digitação, abreviações de WhatsApp (\\\"vc\\\", \\\"pq\\\", \\\"q\\\", \\\"crso\\\") e prováveis erros de transcrição de voz na mensagem_reescrita — mas NUNCA invente dados que o usuário não pediu.\n2. RESOLUÇÃO DE REFERÊNCIA: se a mensagem atual contém um pronome ou referência implícita (\\\"dele\\\", \\\"dela\\\", \\\"desse curso\\\", \\\"ele\\\", \\\"ela\\\") sem nome próprio explícito, procure no HISTÓRICO DA CONVERSA abaixo qual foi a última pessoa, curso ou assunto mencionado, e preencha nome_proprio_mencionado com essa referência resolvida, ajustando a categoria de acordo (geralmente corpo_docente quando a referência é a uma pessoa).\\n   Exemplo: se a mensagem/resposta anterior tratou de \\\"Flávio Roberto Spina\\\" e agora perguntam \\\"qual o e-mail dele\\\", então nome_proprio_mencionado = \\\"Flávio Roberto Spina\\\" e categoria = \\\"corpo_docente\\\".\n3. Se a mensagem for curta/ambígua, sem palavra-chave própria, mas houver conversa recente, herde a categoria do histórico em vez de cair em pergunta_vaga. Nunca herde fora_do_escopo do histórico: avalie a mensagem atual por si só.\n4. Use confianca mais baixa (0.5–0.65) apenas quando realmente não for possível inferir a intenção nem pelo histórico.\n5. Mensagens fixas para uso em resposta_direta:\\n   - pergunta_vaga: \\\"${ String($json.mensagens?.pergunta_vaga || '').replace(/\"/g, '\\\\\\\\\"') }\\\"\\n   - fora_do_escopo: \\\"${ String($json.mensagens?.fora_do_escopo || '').replace(/\"/g, '\\\\\\\\\"') }\\\"\\n   - suporte_humano: \\\"${ String($json.mensagens?.suporte_humano || '').replace(/\"/g, '\\\\\\\\\"') }\\\"\\n6. IMAGENS, VÍDEOS E ÁUDIOS: mensagens de imagem chegam como \"[imagem enviada: <descrição>]\", podendo ter uma legenda do usuário antes. Se a descrição contiver assunto do CECAPE (print de erro, certificado, inscrição, curso, plataforma), classifique na categoria correspondente normalmente. Se cair em pergunta_vaga ou fora_do_escopo, a resposta_direta NÃO deve ser apenas a mensagem fixa: comece com 1 frase curta dizendo o que a imagem mostra (com base na descrição recebida) e conecte com a mensagem fixa correspondente. Exemplo: \"Recebi sua imagem: <resumo em poucas palavras>. Não identifiquei nela um assunto do CECAPE — sua dúvida é sobre cursos, certificados, inscrições, cronograma ou plataforma?\". Nunca responda apenas que não pode ajudar sem mencionar o que recebeu.\\n7. PESSOAS DO CECAPE: perguntas que mencionem nome próprio, sobrenome ou cargo (diretora, coordenador, formador, professor) de alguém que trabalha no CECAPE são SEMPRE corpo_docente, com dentro_escopo=true — mesmo quando parecem pessoais (\\\"quem é Fulano?\\\"). NUNCA classifique como fora_do_escopo uma pergunta sobre um membro da equipe; a resposta será montada apenas com os dados institucionais da base oficial.`\n    },\n    {\n      role: 'user',\n      content:\n`Mensagem do usuário: ${$json.userMessage}\n\nÚltima categoria identificada na conversa (memória de curto prazo): ${$json.ultimaCategoriaConversa || 'nenhuma'}\n\nHistórico recente da conversa (até 4 trocas, 30 min):\n${$json.historicoConversa || '(sem histórico)'}`\n    }\n  ]\n}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "533e3ec6-54f2-4b5a-8588-4aef2a6eba9b",
+      "name": "Agente Master - Classificar intenção",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3200,
+        1808
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yW7EkQI3NtxG318I",
+          "name": "OpenAI - CECAPE - New"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Substituído de classificador determinístico (Levenshtein/regex) para classificação por IA, incluindo resolução de referência (ex.: 'qual o e-mail dele' usando o histórico). Configure a credencial Authorization igual aos demais nós de IA do projeto."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Faz o parse do JSON retornado pela IA classificadora e reconstrói o objeto\n// 'master' no MESMO formato que o restante do workflow já espera, preservando\n// 100% de compatibilidade com os nós seguintes (IF - Modo diagnóstico?, etc.)\nconst original = $('Montar histórico da conversa').first().json;\n\nlet classificacao;\ntry {\n  classificacao = JSON.parse($json.choices?.[0]?.message?.content || '{}');\n} catch (e) {\n  classificacao = {};\n}\n\nconst result = {\n  categoria: classificacao.categoria || 'pergunta_vaga',\n  agente_destino: classificacao.agente_destino || 'resposta_pergunta_vaga',\n  confianca: typeof classificacao.confianca === 'number' ? classificacao.confianca : 0.55,\n  dentro_escopo: classificacao.dentro_escopo !== undefined ? classificacao.dentro_escopo : true,\n  precisa_humano: classificacao.precisa_humano || false,\n  motivo: classificacao.motivo || 'Classificação via IA.',\n  mensagem_reescrita: classificacao.mensagem_reescrita || original.userMessage,\n  resposta_direta: classificacao.resposta_direta || ''\n};\n\n// Fallback de segurança: se a IA não devolver JSON válido nem categoria,\n// usa pergunta_vaga com a mensagem fixa, para nunca travar o atendimento.\nif (!classificacao.categoria) {\n  result.resposta_direta = original.mensagens?.pergunta_vaga || result.resposta_direta;\n}\n\nreturn [{\n  json: {\n    ...original,\n    master: result,\n    categoria: result.categoria,\n    agente_destino: result.agente_destino,\n    confianca: result.confianca,\n    dentro_escopo: result.dentro_escopo,\n    precisa_humano: result.precisa_humano,\n    resposta_direta: result.resposta_direta,\n    nomeProprioMencionado: classificacao.nome_proprio_mencionado || null\n  }\n}];\n"
+      },
+      "id": "a300f3e2-ec57-45a6-929e-37384d454df9",
+      "name": "Parse Classificação IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3424,
+        1424
+      ],
+      "notes": "Segue o mesmo padrão de fix já usado em outros pontos do projeto: o nó de chamada HTTP substitui o $json pelo retorno da API, então aqui resgatamos os dados originais de 'Montar histórico da conversa' e reconstruímos o objeto 'master' no formato esperado pelo restante do fluxo."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "921e626d-9451-4191-8c0a-1e9a95b4bfe4",
+              "leftValue": "={{ $json.diagnosticMode }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a2d1d76c-96ff-4689-9310-abfdd539178c",
+      "name": "IF - Modo diagnóstico?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3648,
+        1424
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const m = $json.master || {};\nconst resposta =\n`[TESTE AGENTE MASTER]\n\nCategoria: ${m.categoria}\nAgente destino: ${m.agente_destino}\nConfiança: ${m.confianca}\nDentro do escopo: ${m.dentro_escopo ? 'sim' : 'não'}\nPrecisa humano: ${m.precisa_humano ? 'sim' : 'não'}\nMotivo: ${m.motivo}\nMensagem reescrita: ${m.mensagem_reescrita || ''}`;\nreturn [{ json: { ...$json, to: $json.from, resposta } }];\n"
+      },
+      "id": "fc935ac2-d958-41e9-96fe-1cec8556193b",
+      "name": "Preparar resposta diagnóstico",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5888,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b12e7eb8-d5f0-4111-a279-3e115fc7e647",
+              "leftValue": "={{ $json.resposta_direta }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b30eef56-8def-4de1-96e0-6e5f91cfde7a",
+      "name": "IF - Tem resposta direta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3872,
+        1520
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mantém a mensagem base para o WhatsApp.\n// A variação de linguagem vem do nó IA Resposta Direta logo abaixo.\nlet resposta = $json.resposta_direta || $json.mensagens.erro_seguro;\n\n// Se a mensagem foi uma imagem, garante que a resposta reconheça o que foi\n// recebido (a descrição gerada pelo Vision está dentro de [imagem enviada: ...]).\n// Feito em código porque o classificador nem sempre segue a instrução do prompt\n// e devolvia apenas a mensagem fixa (\"não posso ajudar\") ignorando a imagem.\nconst marcador = String($json.userMessage || '').match(/\\[imagem enviada: ([\\s\\S]+?)\\]/);\nconst jaMencionaImagem = /imagem|foto/i.test(resposta);\nif (marcador && !jaMencionaImagem) {\n  let descricao = marcador[1].trim().replace(/\\s+/g, ' ');\n  if (descricao.length > 200) descricao = descricao.slice(0, 200).trim() + '...';\n  resposta = `Recebi sua imagem. O que identifiquei nela: ${descricao} ` + resposta;\n}\n\nreturn [{\n  json: {\n    ...$json,\n    to: $json.from,\n    resposta,\n    resposta_direta_base: resposta\n  }\n}];\n"
+      },
+      "id": "b8768304-4371-4307-80a4-4775e742f80f",
+      "name": "Preparar resposta direta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5440,
+        1088
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Define qual aba da planilha oficial deve ser consultada.\n\nconst categoria = $json.categoria || '';\n\nconst mapaAbas = {\n  institucional_cecape: 'INSTITUCIONAL_CECAPE',\n  autoriascs_plataforma: 'AUTORIASCS_PLATAFORMA',\n  cursos_formacoes: 'CURSOS_FORMACOES',\n  agenda_cronograma: 'AGENDA_CRONOGRAMA',\n  certificados: 'CERTIFICADOS',\n  inscricoes: 'INSCRICOES',\n  corpo_docente: 'FORMADORES', // não usado na prática: corpo_docente sempre é desviado antes deste mapa, ver IF - É categoria corpo docente?\n  ferramentas_produtos: 'FERRAMENTAS_PRODUTOS',\n  suporte_humano: 'SUPORTE_ENCAMINHAMENTO',\n  fora_do_escopo: 'FALLBACKS',\n  pergunta_vaga: 'FALLBACKS'\n};\n\nconst nomesAgentes = {\n  institucional_cecape: 'Agente Institucional CECAPE',\n  autoriascs_plataforma: 'Agente AutoriaSCS / Plataforma EAD',\n  cursos_formacoes: 'Agente de Cursos e Formações',\n  agenda_cronograma: 'Agente de Agenda e Cronogramas',\n  certificados: 'Agente de Certificados',\n  inscricoes: 'Agente de Inscrições',\n  corpo_docente: 'Agente de Corpo Docente',\n  ferramentas_produtos: 'Agente de Ferramentas e Produtos',\n  suporte_humano: 'Agente de Suporte Humano'\n};\n\nreturn [{\n  json: {\n    ...$json,\n    nomeAba: mapaAbas[categoria] || 'INSTITUCIONAL_CECAPE',\n    nomeAgenteEspecialista: nomesAgentes[categoria] || 'Agente Especialista CECAPE'\n  }\n}];\n"
+      },
+      "id": "d6604078-be4c-4370-9393-457b520fac01",
+      "name": "Mapear aba da base oficial",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4096,
+        1712
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1NDC8stBwdhc0yUNZNWNiEKHTrDEq5chQqIRP0WAc2RQ",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $json.nomeAba }}",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "e3bd0e8e-1561-4956-83e0-dbef97b391ed",
+      "name": "Google Sheets - Ler base oficial",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4992,
+        1520
+      ],
+      "notesInFlow": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nIfyEUF469O4ic3a",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "notes": "Selecione sua credencial Google Sheets. Este node deve ler a aba dinâmica em {{$json.nomeAba}}."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recebe linhas do Google Sheets e monta o contexto oficial.\n// Usa apenas linhas com ativo = Sim, quando a coluna existir.\n\nfunction normalize(str) {\n  return String(str ?? '')\n    .toLowerCase()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .trim();\n}\n\nfunction isActive(row) {\n  const ativo = row.ativo ?? row.Ativo ?? row.ATIVO;\n  if (ativo === undefined || ativo === null || String(ativo).trim() === '') return true;\n  return ['sim', 's', 'ativo', 'true', '1', 'yes'].includes(normalize(ativo));\n}\n\nconst original = $('Mapear aba da base oficial').first().json;\nconst rows = $input.all().map(item => item.json || {}).filter(row => Object.keys(row).length > 0);\nconst activeRows = rows.filter(isActive);\n\nfunction rowToText(row, index) {\n  const lines = Object.entries(row)\n    .filter(([key, value]) => value !== undefined && value !== null && String(value).trim() !== '')\n    .map(([key, value]) => `${key}: ${String(value).trim()}`);\n  return `Registro ${index + 1}:\\n${lines.join('\\n')}`;\n}\n\nlet contextoOficial = activeRows.map(rowToText).join('\\n\\n---\\n\\n');\n\nif (!contextoOficial) {\n  contextoOficial = `Nenhum registro ativo encontrado na aba ${original.nomeAba}.`;\n}\n\nif (contextoOficial.length > 30000) {\n  contextoOficial = contextoOficial.slice(0, 30000) + '\\n\\n[Contexto reduzido automaticamente por limite de tamanho.]';\n}\n\nreturn [{\n  json: {\n    ...original,\n    quantidadeRegistrosLidos: rows.length,\n    quantidadeRegistrosAtivos: activeRows.length,\n    contextoOficial\n  }\n}];\n"
+      },
+      "id": "62f5d0c0-db5c-4ab2-80d4-2101c4f3c63c",
+      "name": "Filtrar registros ativos e montar contexto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5216,
+        1520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: $json.modeloIA || 'gpt-4o-mini',\n  temperature: 0.75,\n  max_tokens: 2200,\n  messages: [\n    {\n      role: 'system',\n      content:\n`Você é o ${$json.nomeAgenteEspecialista}, um agente especialista do CECAPE — Centro de Capacitação dos Profissionais da Educação.\n\nResponda somente sobre o tema definido pelo Agente Master.\nUse somente a BASE OFICIAL vinda da planilha Google Sheets.\nQuando o usuário pedir um filtro específico (ex: \\\"cursos de educação especial\\\", \\\"cursos de alfabetização\\\"), percorra TODOS os registros do contexto oficial e liste APENAS os que realmente correspondem ao critério pedido, verificando o nome/título e a descrição de cada um. Não responda com os primeiros registros do contexto só porque vieram primeiro — responda com os que de fato combinam com o que foi perguntado. Se nenhum corresponder, diga isso claramente.\\n\\nNão invente datas, links, horários, nomes, cursos, regras, contatos, números, estatísticas, ano de fundação ou qualquer outro dado que não esteja literalmente escrito na BASE OFICIAL abaixo. Se um dado específico (como ano, número de pessoas, endereço) não estiver na base oficial, simplesmente não o mencione — não complete com informação plausível.\n\nCONTATOS DA EQUIPE SÃO PÚBLICOS: os e-mails, telefones, áreas e responsáveis listados na BASE OFICIAL são informações institucionais publicadas pelo próprio CECAPE para divulgação no atendimento. Quando o usuário pedir o contato de alguém da equipe, informe DIRETAMENTE o que estiver na base, sem recusar, sem se desculpar e sem frases como 'não posso fornecer'. Apenas quando o dado realmente não estiver na base oficial, diga que não o possui e oriente a falar com a equipe do CECAPE.\nSe a base oficial não tiver informação suficiente, responda:\n\"${$json.mensagens.sem_informacao}\"\n\nIMPORTANTE SOBRE SAUDAÇÃO: Verifique o histórico recente da conversa (enviado na mensagem do usuário).\\n- Se o histórico indicar '(Nenhuma conversa recente...)', esta é a primeira interação: pode cumprimentar brevemente.\\n- Se já existir histórico recente (uma ou mais trocas), NÃO cumprimente de novo (nada de 'Olá', 'Oi'); vá direto ao conteúdo da resposta, como em uma conversa contínua.\\n\\nVarie o estilo e a estrutura das frases a cada mensagem, mas sem repetir saudações quando já há conversa em andamento. Nunca comece duas respostas consecutivas da mesma forma.\\n\\nResponda em português do Brasil, de forma curta, cordial e adequada para WhatsApp.\nLimite máximo: ${$json.limiteCaracteresResposta || 900} caracteres.`\n    },\n    {\n      role: 'user',\n      content:\n`Categoria definida pelo Master: ${$json.categoria}\nAgente destino: ${$json.agente_destino}\nNome da pessoa (se souber): ${$json.nomeSalvo || 'não informado'}\nMensagem original: ${$json.userMessage}\nMensagem reescrita: ${$json.master?.mensagem_reescrita || $json.userMessage}\nHistórico recente da conversa com este usuário:\n${$json.historicoConversa || '(sem histórico)'}\n\nAba consultada: ${$json.nomeAba}\nRegistros lidos: ${$json.quantidadeRegistrosLidos}\nRegistros ativos: ${$json.quantidadeRegistrosAtivos}\n\nBASE OFICIAL:\n${$json.contextoOficial}\n\nGere a resposta final ao usuário. [seed:${$json.variacaoSeed}]`\n    }\n  ]\n}) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "8ec3ca12-8e02-492c-a950-1586e031c2ea",
+      "name": "IA - Agente Especialista",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5664,
+        1568
+      ],
+      "notesInFlow": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yW7EkQI3NtxG318I",
+          "name": "OpenAI - CECAPE - New"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Use OPENAI_API_KEY no ambiente do n8n ou troque o header Authorization por Bearer SUA_CHAVE_OPENAI."
+    },
+    {
+      "parameters": {
+        "jsCode": "const original = $('Unificar contexto (cursos ou base oficial)').first().json;\n\nlet resposta =\n  $json.choices?.[0]?.message?.content ??\n  $json.output ??\n  $json.text ??\n  '';\n\nresposta = String(resposta || '')\n  .replace(/\\r/g, '')\n  .replace(/\\n{3,}/g, '\\n\\n')\n  .trim();\n\nif (!resposta) {\n  resposta = original.mensagens?.erro_seguro || 'No momento, não consegui processar sua solicitação com segurança.';\n}\n\n// Validação anti-alucinação de links: todo link mencionado pela IA precisa existir\n// literalmente no contexto oficial. Se um link foi inventado/alterado, ele é removido\n// e avisamos no log interno (não exposto ao usuário) para acompanhamento.\nconst contextoOficial = String(original.contextoOficial || '');\n\n// Extrai URLs tanto em markdown [texto](url) quanto soltas no texto.\nconst linksMarkdown = [...resposta.matchAll(/\\]\\((https?:\\/\\/[^)]+)\\)/g)].map(m => m[1]);\nconst linksSoltos = resposta.match(/(?<!\\]\\()https?:\\/\\/[^\\s)]+/g) || [];\nconst linksNaResposta = [...new Set([...linksMarkdown, ...linksSoltos])];\n\nconst linksInventados = [];\nconst linksValidados = [];\n\nfor (const link of linksNaResposta) {\n  const linkLimpo = link.replace(/[.,;!?]+$/, ''); // remove pontuação final colada\n  if (contextoOficial.includes(linkLimpo)) {\n    linksValidados.push(linkLimpo);\n  } else {\n    linksInventados.push(linkLimpo);\n    resposta = resposta.split(link).join('[link indisponível - confirme com a equipe]');\n  }\n}\n\nconst limite = Number(original.limiteCaracteresResposta || 900);\nif (resposta.length > limite) {\n  resposta = resposta.slice(0, limite).trim() + '...';\n}\n\nreturn [{\n  json: {\n    ...original,\n    to: original.from,\n    resposta,\n    linksInventadosDetectados: linksInventados,\n    linksValidadosOk: linksValidados,\n    tamanhoContextoOficial: contextoOficial.length\n  }\n}];\n"
+      },
+      "id": "2b4159d1-cefd-4917-9a99-0f1532788b98",
+      "name": "Preparar resposta especialista",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5888,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { to: $json.from, phoneNumberId: $json.phoneNumberId || '1068905836312533', userName: $json.userName || '', userMessage: $json.userMessage || '', categoria: 'tipo_nao_suportado', agente_destino: 'resposta_tipo_nao_suportado', precisa_humano: false, respostaDeveSerAudio: false, resposta: 'Olá! Este atendimento automático consegue processar mensagens de texto, áudio, imagem e vídeo. Não consegui entender sua mensagem — por favor, envie sua dúvida em texto ou áudio. 😊' } }];"
+      },
+      "id": "37617a42-dcdd-4659-a6c8-634d697eb067",
+      "name": "Resposta - Tipo não suportado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5888,
+        2976
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "id": "f5779e58-5aa0-4ff2-b87a-ce75b6808bca",
+      "name": "Wait - Anti-spam 2s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        6112,
+        880
+      ],
+      "webhookId": "091254bb-80a6-49c2-a195-2b80f80a0f06"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "resp-audio-1",
+                    "leftValue": "={{ $json.respostaDeveSerAudio === true }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "audio"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "72ac6447-7b63-425e-b552-cc6cf599c36c",
+      "name": "Switch - Formato de resposta",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        6336,
+        880
+      ],
+      "notes": "Se a pergunta original chegou em áudio (respostaDeveSerAudio = true, setado em 'Converter áudio em texto'), a resposta também sai em áudio via TTS. Demais casos seguem o caminho de texto, idêntico ao comportamento atual."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/speech",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => {\n  const bruta = String($json.resposta || '');\n  const temLink = /https?:\\/\\//i.test(bruta);\n  let texto = bruta\n    // E-mails falados: soletra o que não é palavra para a dicção sair correta.\n    // Caso institucional: @scseduca.com.br era pronunciado como 'sceduca'.\n    .replace(/([A-Za-z0-9._%+-]+)@scseduca\\.com\\.br/gi, (m0, u) => `${u.replace(/\\./g, ' ponto ')}, arroba, ésse cê ésse educa, ponto com, ponto bê erre`)\n    .replace(/([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})/g, (m0, u, d) => `${u.replace(/\\./g, ' ponto ')}, arroba, ${d.replace(/\\./g, ', ponto, ')}`)\n    .replace(/https?:\\/\\/\\S+/gi, '')\n    .replace(/[*_#`~]/g, '')\n    .replace(/[\\u{1F000}-\\u{1FAFF}\\u{2600}-\\u{27BF}\\u{2190}-\\u{21FF}\\u{FE0F}\\u{200D}]/gu, '')\n    .replace(/[ \\t]{2,}/g, ' ')\n    .trim();\n  if (temLink) texto += ' Os links desta resposta eu posso te mandar por escrito: é só me pedir aqui no chat.';\n  if (!texto) texto = 'Desculpe, não consegui gerar esta resposta em áudio. Pode tentar novamente?';\n  return JSON.stringify({\n    model: 'gpt-4o-mini-tts',\n    voice: 'nova',\n    instructions: 'Fale em português brasileiro, com tom cordial, natural e profissional, como uma atendente simpática de um centro de formação de professores.',\n    input: texto.slice(0, 4000),\n    response_format: 'mp3'\n  });\n})() }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "0275811f-6e21-44d9-a7bf-0d4f46037ac8",
+      "name": "OpenAI - Gerar áudio (TTS)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6560,
+        736
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yW7EkQI3NtxG318I",
+          "name": "OpenAI - CECAPE - New"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Voz 'nova' tem boa naturalidade em PT-BR. Alternativa testável depois: ElevenLabs, se quiser voz ainda mais humanizada (custo adicional)."
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $json.phoneNumberId || '1068905836312533' }}",
+        "recipientPhoneNumber": "={{ String($json.to || '').startsWith('+') ? String($json.to) : '+' + String($json.to || '') }}",
+        "messageType": "audio",
+        "mediaPath": "useMedian8n",
+        "additionalFields": {}
+      },
+      "id": "ce9cd20f-6ac9-4803-a90f-674012a8eb50",
+      "name": "WhatsApp - Enviar áudio",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        7008,
+        976
+      ],
+      "webhookId": "847e69ef-58f4-4eec-92d6-b3dffbedf8ba",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "c5A8oh1Pdcce2iix",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Verificar no node real do n8n qual operação/campo exato envia mídia binária (áudio) via WhatsApp — pode exigir 'operation: sendMedia' com binaryPropertyName em vez de 'send' com textBody, dependendo da versão do nó instalada. Ajustar após primeiro teste."
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $json.phoneNumberId || '1068905836312533' }}",
+        "recipientPhoneNumber": "={{ String($json.to || '').startsWith('+') ? String($json.to) : '+' + String($json.to || '') }}",
+        "textBody": "={{ $json.resposta }}",
+        "additionalFields": {}
+      },
+      "id": "ab6fe4a0-38db-45e0-877f-b59b217d211f",
+      "name": "WhatsApp - Enviar resposta",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        7008,
+        704
+      ],
+      "webhookId": "f26ec934-6298-4001-b6c7-39a11bc85c0b",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "c5A8oh1Pdcce2iix",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// CRM: consolida o registro da mensagem depois do envio da resposta.\n// Atualiza a MESMA linha criada na entrada (match por id_mensagem) com a\n// resposta enviada, categoria, formato, tempos e status \"Respondida\".\nconst entrada = $('Extrair dados da mensagem').first().json;\nconst d = $json;\n\nconst agora = new Date();\nconst recebidaEm = entrada.receivedAt ? new Date(entrada.receivedAt) : null;\nconst tempoRespostaSegundos = (recebidaEm && !isNaN(recebidaEm))\n  ? Math.round((agora.getTime() - recebidaEm.getTime()) / 1000)\n  : '';\n\nconst formatoResposta = d.ttsFalhou\n  ? 'texto (fallback TTS)'\n  : (d.respostaDeveSerAudio ? 'áudio' : 'texto');\n\nconst tipoLabel = {\n  text: 'texto', audio: 'áudio', image: 'imagem', video: 'vídeo',\n  button: 'botão', interactive: 'interativo', document: 'documento', sticker: 'figurinha'\n};\n\nreturn [{\n  json: {\n    id_mensagem: entrada.messageId || '',\n    timestamp_recebida: entrada.receivedAt || '',\n    data_hora: agora.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),\n    numero_usuario: d.to || d.from || entrada.from || '',\n    nome_usuario: d.nomeSalvo || d.userName || entrada.userName || '',\n    formato_recebido: tipoLabel[entrada.messageType] || entrada.messageType || '',\n    mensagem_recebida: d.userMessage || entrada.userMessage || '',\n    categoria_identificada: d.categoria || d.master?.categoria || '',\n    agente_acionado: d.agente_destino || d.master?.agente_destino || '',\n    resposta_enviada: d.resposta || '',\n    formato_resposta: formatoResposta,\n    timestamp_resposta: agora.toISOString(),\n    tempo_resposta_segundos: String(tempoRespostaSegundos),\n    status: 'Respondida',\n    erro: (d.linksInventadosDetectados && d.linksInventadosDetectados.length > 0)\n      ? `Links inventados removidos (contexto: ${d.tamanhoContextoOficial || 0} chars): ${d.linksInventadosDetectados.join(', ')}`\n      : '',\n    encaminhamento_humano: (d.precisa_humano || d.master?.precisa_humano) ? 'Sim' : 'Não'\n  }\n}];\n"
+      },
+      "id": "70c36908-71c0-40b5-b306-d5d4c7d9629b",
+      "name": "CRM - Preparar registro de resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7456,
+        560
+      ],
+      "notesInFlow": true,
+      "notes": "CRM: atualiza a linha da mensagem com a resposta enviada e status Respondida."
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1NDC8stBwdhc0yUNZNWNiEKHTrDEq5chQqIRP0WAc2RQ",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LOG_ATENDIMENTOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_mensagem": "={{ $json.id_mensagem }}",
+            "timestamp_recebida": "={{ $json.timestamp_recebida }}",
+            "data_hora": "={{ $json.data_hora }}",
+            "numero_usuario": "={{ $json.numero_usuario }}",
+            "nome_usuario": "={{ $json.nome_usuario }}",
+            "formato_recebido": "={{ $json.formato_recebido }}",
+            "mensagem_recebida": "={{ $json.mensagem_recebida }}",
+            "categoria_identificada": "={{ $json.categoria_identificada }}",
+            "agente_acionado": "={{ $json.agente_acionado }}",
+            "resposta_enviada": "={{ $json.resposta_enviada }}",
+            "formato_resposta": "={{ $json.formato_resposta }}",
+            "timestamp_resposta": "={{ $json.timestamp_resposta }}",
+            "tempo_resposta_segundos": "={{ $json.tempo_resposta_segundos }}",
+            "status": "={{ $json.status }}",
+            "erro": "={{ $json.erro }}",
+            "encaminhamento_humano": "={{ $json.encaminhamento_humano }}"
+          },
+          "matchingColumns": [
+            "id_mensagem"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "950720dd-7a18-4edb-888d-2406d143de6e",
+      "name": "CRM - Atualizar registro (respondida)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        7680,
+        560
+      ],
+      "notesInFlow": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nIfyEUF469O4ic3a",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "CRM: atualiza (por id_mensagem) a linha criada na entrada com a resposta. Se a linha não existir, faz append. Requer as colunas novas na aba LOG_ATENDIMENTOS (execute scripts/setup_crm_planilha.gs)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "69a19d00-9aa2-413c-bb1b-aa6dbb345414",
+              "leftValue": "={{ $json.categoria }}",
+              "rightValue": "cursos_formacoes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "996013c4-f71a-443b-9f6f-8dcc7460ce02",
+      "name": "IF - É categoria cursos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4320,
+        1712
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calcula a lista de meses a consultar: do mês seguinte ao atual até dezembro.\n// Cada item gerado vira uma execução separada do node de leitura do Google Sheets.\n// Abas no formato: JANEIRO, FEVEREIRO, MARÇO, ... (maiúsculas, com acento)\n\nconst meses = [\n  'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',\n  'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'\n];\n\nconst hoje = new Date();\nconst indiceMesAtual = hoje.getMonth(); // 0 = janeiro ... 11 = dezembro\nconst indiceProximoMes = indiceMesAtual + 1; // primeiro mês a consultar\n\nconst mesesAConsultar = [];\nfor (let i = indiceProximoMes; i <= 11; i++) {\n  mesesAConsultar.push(meses[i]);\n}\n\n// Se já estamos em dezembro, não há mês seguinte dentro do mesmo ano.\n// Nesse caso, mantém ao menos o mês atual como fallback para não ficar sem nada.\nif (mesesAConsultar.length === 0) {\n  mesesAConsultar.push(meses[indiceMesAtual]);\n}\n\n// Gera um item por mês a consultar, preservando todos os dados originais em cada um.\nreturn mesesAConsultar.map(nomeMes => ({\n  json: {\n    ...$json,\n    nomeAbaCursos: nomeMes\n  }\n}));\n"
+      },
+      "id": "ac4aea56-0f6e-4833-9ea3-d3a58719542e",
+      "name": "Calcular mês seguinte",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4768,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "11_isrdRYiew08xo7rZyBqx1YkvyfR7IRmrHui37x768",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $json.nomeAbaCursos }}",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "1ebc3b5f-395d-4613-9b48-2e8fe5ad5e15",
+      "name": "Google Sheets - Ler cursos do mês",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4992,
+        1328
+      ],
+      "notesInFlow": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nIfyEUF469O4ic3a",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "notes": "Lê a aba do mês seguinte na planilha de Cursos Abertos do CECAPE."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta o contexto oficial de cursos a partir da planilha de Cursos Abertos.\n// Agora consulta TODOS os meses do mês seguinte até dezembro (múltiplos meses por execução).\n// Filtra por DIVULGAR = Sim (quando a coluna existir) e remove e-mails da coluna FORMADORES.\n// A coluna DIVULGAR nunca é exibida ao usuário.\n// Inclui o LINK_INSCRICAO de cada curso (ainda fictício, até existir coluna própria na planilha).\n\nfunction normalize(str) {\n  return String(str ?? '')\n    .toLowerCase()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .trim();\n}\n\nfunction deveDivulgar(row) {\n  const divulgar = row['DIVULGAR'] ?? row['Divulgar'] ?? row['divulgar'];\n  if (divulgar === undefined || divulgar === null || String(divulgar).trim() === '') return true;\n  return ['sim', 's', 'true', '1', 'yes'].includes(normalize(divulgar));\n}\n\nfunction limparFormadores(valor) {\n  if (!valor) return '';\n  return String(valor)\n    .split(/[,;\\n]/)\n    .map(parte => parte.replace(/\\S+@\\S+/g, '').trim())\n    .filter(Boolean)\n    .join(', ');\n}\n\nfunction gerarLinkInscricaoFicticio(idCurso) {\n  // Link fictício, apenas para visualizar como ficará na mensagem.\n  // Quando a planilha tiver uma coluna real de link, substituir esta função.\n  return `https://inscricoes.cecape.org.br/curso/${idCurso}`;\n}\n\n// Dados originais (categoria, mensagens, etc.) vêm de antes do branch de meses.\nconst original = $('Calcular mês seguinte').first().json;\n\n// Itens de entrada: cada um é uma linha de curso, vinda de algum dos meses consultados.\n// O node de leitura roda uma vez por mês (um item de entrada = um mês), então usamos\n// o índice de execução (pairedItem) para recuperar de qual mês cada linha veio.\nconst itensEntrada = $input.all();\nconst mesesConsultados = $('Calcular mês seguinte').all().map(item => item.json.nomeAbaCursos);\n\nconst linhasComMes = itensEntrada.map(item => {\n  const row = item.json || {};\n  let nomeMesOrigem = '';\n  try {\n    const indiceOrigem = item.pairedItem?.item ?? item.pairedItem?.[0]?.item;\n    nomeMesOrigem = mesesConsultados[indiceOrigem] || '';\n  } catch (e) {\n    nomeMesOrigem = '';\n  }\n  return { row, nomeMesOrigem };\n});\n\nconst linhasValidas = linhasComMes.filter(({ row }) => row && Object.keys(row).length > 0);\nconst cursosDivulgaveis = linhasValidas.filter(({ row }) => deveDivulgar(row));\n\nconst colunasExibidas = [\n  'DATA', 'INÍCIO', 'TÉRMINO', 'DIA DA SEMANA', 'ESPAÇO',\n  'FORMADORES', 'TÍTULO', 'ETAPAS', 'COMPONENTE CURRICULAR',\n  'PÚBLICO-ALVO', 'FORMATO', 'VAGAS', 'GOOGLE SALA DE AULA'\n];\n\nfunction rowToText({ row, nomeMesOrigem }, index) {\n  const linhas = colunasExibidas\n    .map(coluna => {\n      let valor = row[coluna];\n      if (coluna === 'FORMADORES') valor = limparFormadores(valor);\n      if (valor === undefined || valor === null || String(valor).trim() === '') return null;\n      return `${coluna}: ${String(valor).trim()}`;\n    })\n    .filter(Boolean);\n\n  const idCurso = `${(nomeMesOrigem || 'curso').toLowerCase()}-${index + 1}`;\n  const linkInscricao = gerarLinkInscricaoFicticio(idCurso);\n\n  return `Curso ${index + 1} (Mês: ${nomeMesOrigem || 'não identificado'}):\\n${linhas.join('\\n')}\\nLink de inscrição: ${linkInscricao}`;\n}\n\nlet contextoCursos = cursosDivulgaveis.map(rowToText).join('\\n\\n---\\n\\n');\n\nif (!contextoCursos) {\n  contextoCursos = `Nenhum curso encontrado entre os meses consultados (${mesesConsultados.join(', ')}).`;\n}\n\nif (contextoCursos.length > 12000) {\n  contextoCursos = contextoCursos.slice(0, 12000) + '\\n\\n[Contexto reduzido automaticamente por limite de tamanho.]';\n}\n\nreturn [{\n  json: {\n    ...original,\n    nomeAba: `CURSOS (${mesesConsultados.join(', ')})`,\n    quantidadeRegistrosLidos: linhasValidas.length,\n    quantidadeRegistrosAtivos: cursosDivulgaveis.length,\n    contextoOficial: contextoCursos\n  }\n}];\n"
+      },
+      "id": "9ab784f5-d868-466c-8a64-92dbe7b6108d",
+      "name": "Montar contexto de cursos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5216,
+        1328
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b766f107-04aa-4018-836d-260a26a1e7c1",
+      "name": "Unificar contexto (cursos ou base oficial)",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        5440,
+        1568
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1NDC8stBwdhc0yUNZNWNiEKHTrDEq5chQqIRP0WAc2RQ",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LOG_ATENDIMENTOS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "ab7f3efa-25c7-4625-8ecf-c174615862ea",
+      "name": "Google Sheets - Ler log recente",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2752,
+        1808
+      ],
+      "notesInFlow": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nIfyEUF469O4ic3a",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "notes": "Lê todo o LOG_ATENDIMENTOS para extrair o histórico recente do mesmo número."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta um histórico curto da conversa com o mesmo número,\n// usando o LOG_ATENDIMENTOS como memória de curto prazo.\n// Considera apenas mensagens dos últimos 30 minutos e no máximo as últimas 4 trocas.\n\nconst original = $('CONFIG - Agente Master').first().json;\nconst numeroAtual = String(original.from || '').replace(/\\D/g, '');\n\nconst JANELA_MINUTOS = 30;\nconst MAX_TROCAS = 4;\n\nfunction parseDataHoraBR(str) {\n  // Formato salvo: \"dd/mm/aaaa, hh:mm:ss\" (pt-BR, America/Sao_Paulo)\n  const m = String(str || '').match(/(\\d{2})\\/(\\d{2})\\/(\\d{4}),?\\s*(\\d{2}):(\\d{2}):(\\d{2})/);\n  if (!m) return null;\n  const [, dia, mes, ano, h, min, seg] = m;\n  return new Date(`${ano}-${mes}-${dia}T${h}:${min}:${seg}`);\n}\n\nconst linhas = $input.all().map(item => item.json || {});\n\nconst agora = new Date();\nconst limiteJanela = new Date(agora.getTime() - JANELA_MINUTOS * 60 * 1000);\n\nconst doMesmoNumero = linhas.filter(linha => {\n  const numeroLinha = String(linha.numero_usuario || '').replace(/\\D/g, '');\n  // CRM v3.5: a mensagem atual já foi registrada na entrada (status Recebida),\n  // então precisa ser excluída do histórico; linhas ainda sem resposta também.\n  const ehMensagemAtual = String(linha.id_mensagem || '') === String(original.messageId || '');\n  const temResposta = String(linha.resposta_enviada || '').trim().length > 0;\n  return numeroLinha && numeroLinha === numeroAtual && !ehMensagemAtual && temResposta;\n});\n\nconst recentes = doMesmoNumero.filter(linha => {\n  const dataHora = parseDataHoraBR(linha.data_hora);\n  return dataHora && dataHora >= limiteJanela;\n});\n\nconst ultimasTrocas = recentes.slice(-MAX_TROCAS);\n\nlet historicoConversa = '';\nif (ultimasTrocas.length > 0) {\n  historicoConversa = ultimasTrocas\n    .map((linha, i) => {\n      const pergunta = String(linha.mensagem_recebida || '').trim();\n      const resposta = String(linha.resposta_enviada || '').trim();\n      return `[Troca ${i + 1}]\\nUsuário: ${pergunta}\\nAgente: ${resposta}`;\n    })\n    .join('\\n\\n');\n} else {\n  historicoConversa = '(Nenhuma conversa recente com este usuário. Trate como primeira mensagem.)';\n}\n\nconst ultimaCategoria = ultimasTrocas.length > 0\n  ? (ultimasTrocas[ultimasTrocas.length - 1].categoria_identificada || '')\n  : '';\n\nreturn [{\n  json: {\n    ...original,\n    historicoConversa,\n    ultimaCategoriaConversa: ultimaCategoria\n  }\n}];\n"
+      },
+      "id": "1c071d8d-4c09-41c6-a666-8bd0aaf34e12",
+      "name": "Montar histórico da conversa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2976,
+        1808
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: $json.modeloIA || 'gpt-4o-mini',\n  temperature: 0.8,\n  max_tokens: 200,\n  messages: [\n    {\n      role: 'system',\n      content:\n`Voce e um agente de atendimento do CECAPE - Centro de Capacitacao dos Profissionais da Educacao, respondendo no WhatsApp.\n\nReescreva a MENSAGEM BASE abaixo de forma natural, cordial e curta, mantendo EXATAMENTE o mesmo sentido e as mesmas informacoes.\nNao invente nada alem do que esta na mensagem base. Nao adicione opcoes novas.\nVarie o estilo e a estrutura da frase a cada chamada - nunca repita a mesma abertura.\\nIMPORTANTE: verifique o HISTORICO DA CONVERSA informado abaixo. Se o historico indicar que NAO ha conversa recente (primeira mensagem), cumprimente: use Bom dia, Boa tarde ou Boa noite (conforme o periodo do dia) seguido do primeiro nome da pessoa, se souber o nome. Se JA existe historico de conversa recente (a pessoa ja mandou mensagem antes), NAO cumprimente de novo - vá direto ao conteudo da mensagem base, sem 'Bom dia/Boa tarde/Boa noite' e sem repetir o nome.\nResponda em portugues do Brasil, adequado para WhatsApp.\nLimite maximo: ${ String($json.userMessage || '').includes('[imagem enviada:') ? 500 : 300 } caracteres. Se a mensagem base descrever uma imagem recebida, preserve essa descricao na reescrita.`\n    },\n    {\n      role: 'user',\n      content:\n`MENSAGEM BASE:\\n${$json.resposta_direta_base || $json.resposta}\\n\\nPeriodo do dia agora: ${$json.periodoDoDia || 'nao informado'}\\nNome da pessoa (se souber): ${$json.nomeSalvo || 'nao informado'}\\nHistorico recente da conversa com este usuario:\\n${$json.historicoConversa || '(sem historico)'}\\n\\n[seed:${$json.variacaoSeed}]\\n\\nReescreva variando o estilo, respeitando a regra de saudacao com base no historico acima.`\n    }\n  ]\n}) }}",
+        "options": {}
+      },
+      "id": "cfa22d99-6084-4b16-8e4c-870ac5f129af",
+      "name": "IA - Variar resposta direta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5664,
+        1088
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yW7EkQI3NtxG318I",
+          "name": "OpenAI - CECAPE - New"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Repita aqui a mesma configuracao de credencial Bearer Auth ja feita no node 'IA - Agente Especialista'."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Usa a resposta variada da IA; se falhar, usa a mensagem base fixa como fallback.\n// Importante: os dados originais (to, mensagens, etc.) vêm de \"Preparar resposta direta\",\n// não do retorno da OpenAI (que só tem choices/usage/model).\nconst original = $('Preparar resposta direta').first().json;\n\nlet respostaVariada =\n  $json.choices?.[0]?.message?.content ??\n  '';\n\nrespostaVariada = String(respostaVariada || '')\n  .replace(/\\r/g, '')\n  .replace(/\\n{3,}/g, '\\n\\n')\n  .trim();\n\nconst respostaFinal = respostaVariada || original.resposta_direta_base || original.mensagens?.erro_seguro || '';\n\nreturn [{\n  json: {\n    ...original,\n    resposta: respostaFinal\n  }\n}];\n"
+      },
+      "id": "4842f0c7-97ff-4094-9f86-9a060569b712",
+      "name": "Preparar resposta direta final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5888,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1NDC8stBwdhc0yUNZNWNiEKHTrDEq5chQqIRP0WAc2RQ",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CONTATOS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "7293ac6d-b632-4e72-85e7-d6260cc7fd73",
+      "name": "Google Sheets - Ler contatos",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        960,
+        1824
+      ],
+      "notesInFlow": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nIfyEUF469O4ic3a",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "notes": "Lê todos os contatos para verificar se este número já é conhecido."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verifica se o número já existe na aba CONTATOS.\n// Define se é um contato novo (precisa se apresentar e perguntar o nome)\n// ou um contato conhecido (usa o nome salvo, sem perguntar de novo).\n\n// A mensagem pode ter chegado como áudio/vídeo/imagem: nesse caso o texto\n// definitivo (transcrição/descrição) está no nó conversor, não na extração.\nlet original = $('Extrair dados da mensagem').first().json;\nfor (const nomeNo of ['Converter transcrição em texto', 'Converter imagem em texto']) {\n  try {\n    const convertido = $(nomeNo).first().json;\n    if (convertido && convertido.userMessage) { original = convertido; break; }\n  } catch (e) { /* nó não executou nesta execução (mensagem não era desse tipo) */ }\n}\nconst numeroAtual = String(original.from || '').replace(/\\D/g, '');\n\n// Filtra itens vazios (caso a planilha CONTATOS ainda não tenha registros\n// e o node de leitura tenha retornado um item vazio via alwaysOutputData).\nconst linhas = $input.all()\n  .map(item => item.json || {})\n  .filter(linha => linha && Object.keys(linha).length > 0 && linha.numero);\n\nconst contatoExistente = linhas.find(linha => {\n  const numeroLinha = String(linha.numero || '').replace(/\\D/g, '');\n  return numeroLinha && numeroLinha === numeroAtual;\n});\n\nconst ehContatoNovo = !contatoExistente;\nconst nomeSalvo = contatoExistente?.nome ? String(contatoExistente.nome).trim() : '';\nconst jaApresentado = contatoExistente?.apresentado\n  ? ['sim', 's', 'true', '1'].includes(String(contatoExistente.apresentado).toLowerCase().trim())\n  : false;\n\n// Tenta capturar um nome se a pessoa respondeu à pergunta \"qual é o seu nome?\"\n// (heurística simples: contato é novo, já foi apresentado antes mas ainda sem nome salvo,\n// e a mensagem atual parece ser só um nome — curta, sem números, sem pontuação de pergunta)\nconst mensagemAtual = String(original.userMessage || '').trim();\nconst pareceSerNome = mensagemAtual.length > 0 && mensagemAtual.length <= 60 &&\n  !/[0-9?]/.test(mensagemAtual) &&\n  mensagemAtual.split(' ').length <= 5;\n\nconst precisaPerguntarNome = ehContatoNovo || (!nomeSalvo && jaApresentado === false);\nconst respondendoNome = !ehContatoNovo && !nomeSalvo && jaApresentado && pareceSerNome;\n\nconst primeiroContatoSalvo = contatoExistente?.primeiro_contato || '';\n\nreturn [{\n  json: {\n    ...original,\n    ehContatoNovo,\n    nomeSalvo,\n    jaApresentado,\n    precisaPerguntarNome,\n    respondendoNome,\n    primeiro_contato: primeiroContatoSalvo\n  }\n}];\n"
+      },
+      "id": "3a36bdb9-d746-4d86-a88b-c62563cc7031",
+      "name": "Identificar contato",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        1824
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1NDC8stBwdhc0yUNZNWNiEKHTrDEq5chQqIRP0WAc2RQ",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CONTATOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "numero": "={{ $json.from }}",
+            "nome": "={{ $json.respondendoNome ? $json.userMessage.trim() : ($json.nomeSalvo || '') }}",
+            "primeiro_contato": "={{ $json.ehContatoNovo ? new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : $json.primeiro_contato }}",
+            "ultima_interacao": "={{ new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) }}",
+            "apresentado": "Sim"
+          },
+          "matchingColumns": [
+            "numero"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "ff279a17-4a2e-4435-969e-6e5ef4d704d1",
+      "name": "Google Sheets - Salvar contato",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1408,
+        1824
+      ],
+      "notesInFlow": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nIfyEUF469O4ic3a",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "notes": "Cria o contato na primeira interação e atualiza o nome quando a pessoa responder."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "5b2120bc-1add-4823-be5e-e537eb27fbaf",
+              "leftValue": "={{ $json.precisaPerguntarNome }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8047dd35-bef9-4709-ba47-d85fb3b4e2a3",
+      "name": "IF - Precisa se apresentar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1856,
+        1824
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mensagem de apresentação para contatos novos, pedindo o nome.\n// É uma mensagem fixa (sem IA) para garantir consistência institucional.\n\nreturn [{\n  json: {\n    ...$json,\n    to: $json.from,\n    resposta: 'Olá! 👋 Eu sou o Comunicador Oficial do CECAPE IA, o assistente virtual do Centro de Capacitação dos Profissionais da Educação.\\n\\nAntes de começarmos, qual é o seu nome?'\n  }\n}];\n"
+      },
+      "id": "b0a1dce2-fe8c-4fb0-8285-e3baef09692c",
+      "name": "Preparar apresentação inicial",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5888,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "a5e4a929-c4ca-40de-9a28-3524c55cccdb",
+              "leftValue": "={{ $json.respondendoNome }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8fd87677-e566-452e-9a1d-3233a4c34a75",
+      "name": "IF - É resposta com o nome?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        1968
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Confirma o nome recebido e explica brevemente o que o assistente pode fazer.\n// Mensagem fixa, sem IA, para garantir consistência.\n\nconst primeiroNome = String($json.userMessage || '').trim().split(' ')[0];\n\nreturn [{\n  json: {\n    ...$json,\n    to: $json.from,\n    resposta: `Prazer, ${primeiroNome}! 😊 Estou aqui para te ajudar com dúvidas sobre cursos, certificados, inscrições, cronograma, acesso à plataforma ou suporte técnico do CECAPE. Pode me perguntar!`\n  }\n}];\n"
+      },
+      "id": "31184dba-fb60-4ee8-b636-40a6172730f1",
+      "name": "Preparar confirmação de nome",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5888,
+        3168
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// O node anterior (Google Sheets - Salvar contato) substitui o $json\n// pelo retorno da escrita na planilha, perdendo userMessage, categoria, etc.\n// Aqui restauramos todos os dados originais calculados em \"Identificar contato\".\n\nconst original = $('Identificar contato').first().json;\n\nreturn [{\n  json: {\n    ...original\n  }\n}];\n"
+      },
+      "id": "8cf921ea-06c6-4a7d-bd4e-84f8ac0d2d9b",
+      "name": "Restaurar dados após salvar contato",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        1824
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $json.phoneNumberId || '1068905836312533' }}/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: $json.messageId, typing_indicator: { type: 'text' } }) }}",
+        "options": {}
+      },
+      "id": "58dae117-9290-4f6d-bea3-7c83a1fba418",
+      "name": "WhatsApp - Mostrar digitando",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        1632
+      ],
+      "credentials": {
+        "whatsAppApi": {
+          "id": "c5A8oh1Pdcce2iix",
+          "name": "WhatsApp account"
+        }
+      },
+      "continueOnFail": true,
+      "notes": "Marca a mensagem como lida e mostra 'digitando...' por até 25s, usando a mesma credencial do nó 'WhatsApp - Enviar resposta'."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "1fe0159b-37d6-47e2-83e8-c658d23d4409",
+              "leftValue": "={{ $json.categoria }}",
+              "rightValue": "corpo_docente",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "deef1ef1-074a-4ab2-92f0-6da7e6213b8f",
+      "name": "IF - É categoria corpo docente?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4544,
+        2080
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta o contexto de corpo docente a partir das 6 abas permitidas\n// (INFANTIL, INICIAIS, FINAIS, PROJETOS, GESTÃO, Direção), cada uma lida por um node\n// fixo e dedicado (evita o bug do node Google Sheets com sheetName dinâmico\n// repetindo o mesmo conjunto de linhas para todos os itens de entrada).\n//\n// O cabeçalho real da coluna de nomes varia por aba (ex: \"FORMADORES • EDUCAÇÃO\n// INFANTIL\"), então pegamos sempre o primeiro valor textual de cada linha\n// (coluna A) como nome, e o segundo valor (coluna B) como e-mail.\n// E-mails agora SÃO incluídos no contexto (liberado a pedido do usuário) —\n// a IA decide se exibe ou não, conforme o que foi perguntado.\n\nconst original = $('IF - É categoria corpo docente?').first().json;\n\nconst mapaAreaNode = {\n  'INFANTIL': 'GSheets - Docente INFANTIL',\n  'INICIAIS': 'GSheets - Docente INICIAIS',\n  'FINAIS': 'GSheets - Docente FINAIS',\n  'PROJETOS': 'GSheets - Docente PROJETOS',\n  'GESTÃO': 'GSheets - Docente GESTÃO',\n  'DIREÇÃO': 'GSheets - Docente DIREÇÃO'\n};\n\nfunction extrairPessoas(nomeNode) {\n  const linhas = $(nomeNode).all().map(item => item.json || {});\n  const pessoas = [];\n  for (const row of linhas) {\n    if (Object.keys(row).length === 0) continue;\n    const valores = Object.values(row).filter(v => typeof v !== 'number');\n    let nome = String(valores[0] || '').trim();\n    let email = String(valores[1] || '').trim();\n\n    const pareceCabecalhoOuLixo = !nome || nome.includes('@') || nome.toUpperCase() === 'NOME';\n    if (pareceCabecalhoOuLixo) continue;\n\n    pessoas.push({ nome, email });\n  }\n  return pessoas;\n}\n\nconst pessoasPorArea = {};\nfor (const [area, nomeNode] of Object.entries(mapaAreaNode)) {\n  pessoasPorArea[area] = extrairPessoas(nomeNode);\n}\n\nconst totalGeral = Object.values(pessoasPorArea).reduce((acc, arr) => acc + arr.length, 0);\n\nconst blocos = Object.entries(pessoasPorArea)\n  .map(([area, pessoas]) => {\n    const linhasPessoas = pessoas.length > 0\n      ? pessoas.map(p => `- ${p.nome}${p.email ? ' | e-mail: ' + p.email : ''}`).join('\\n')\n      : '(nenhum nome encontrado)';\n    return `Área: ${area} (${pessoas.length} pessoa${pessoas.length !== 1 ? 's' : ''})\\n${linhasPessoas}`;\n  });\n\nlet contextoDocente = `TOTAL GERAL DE PESSOAS CADASTRADAS (formadores, professores, gestão e direção): ${totalGeral}\\n\\n` + blocos.join('\\n\\n---\\n\\n');\n\nreturn [{\n  json: {\n    ...original,\n    nomeAba: `CORPO DOCENTE (${Object.keys(mapaAreaNode).join(', ')})`,\n    contextoOficial: contextoDocente,\n    quantidadeRegistrosLidos: totalGeral,\n    quantidadeRegistrosAtivos: totalGeral\n  }\n}];\n"
+      },
+      "id": "42537ba5-9aed-4bcd-bef3-ae8732913868",
+      "name": "Montar contexto de corpo docente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5216,
+        2192
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1W1_v9ZcePVaezEoAEM9GxPlj0n9rJJLz-ofvb1OEDp4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "INFANTIL",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "f8b17174-5485-4ee1-a611-cf8c6d9bad2f",
+      "name": "GSheets - Docente INFANTIL",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4768,
+        1712
+      ],
+      "notesInFlow": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nIfyEUF469O4ic3a",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "notes": "Aba fixa: INFANTIL. Lê a partir da linha 3 (cabeçalho real)."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1W1_v9ZcePVaezEoAEM9GxPlj0n9rJJLz-ofvb1OEDp4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "INICIAIS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "db07a347-ebc4-41b0-9740-681262381429",
+      "name": "GSheets - Docente INICIAIS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4768,
+        1904
+      ],
+      "notesInFlow": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nIfyEUF469O4ic3a",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "notes": "Aba fixa: INICIAIS. Lê a partir da linha 3 (cabeçalho real)."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1W1_v9ZcePVaezEoAEM9GxPlj0n9rJJLz-ofvb1OEDp4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "FINAIS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "63b90284-f0e8-4af0-9599-a5211799d44e",
+      "name": "GSheets - Docente FINAIS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4768,
+        2096
+      ],
+      "notesInFlow": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nIfyEUF469O4ic3a",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "notes": "Aba fixa: FINAIS. Lê a partir da linha 3 (cabeçalho real)."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1W1_v9ZcePVaezEoAEM9GxPlj0n9rJJLz-ofvb1OEDp4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "PROJETOS",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "b43561a5-cad9-4c8d-a91d-356f6de5abfa",
+      "name": "GSheets - Docente PROJETOS",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4768,
+        2288
+      ],
+      "notesInFlow": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nIfyEUF469O4ic3a",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "notes": "Aba fixa: PROJETOS. Lê a partir da linha 3 (cabeçalho real)."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1W1_v9ZcePVaezEoAEM9GxPlj0n9rJJLz-ofvb1OEDp4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "GESTÃO",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "ec7a82a6-aad7-4abe-aa3e-da55a4f17818",
+      "name": "GSheets - Docente GESTÃO",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4768,
+        2480
+      ],
+      "notesInFlow": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nIfyEUF469O4ic3a",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "notes": "Aba fixa: GESTÃO. Lê a partir da linha 3 (cabeçalho real)."
+    },
+    {
+      "parameters": {
+        "numberInputs": 6
+      },
+      "id": "3f0dfe85-eb97-42b8-bcbf-e738074f7051",
+      "name": "Unificar leitura corpo docente",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        4992,
+        2128
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.messageType }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "232a537d-52c0-4eb2-8c24-ac203fc9f894"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "audio"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "7aa408d1-d604-494b-9e08-745535d15d27",
+                    "leftValue": "={{ $json.messageType }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "image"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "72163e83-dbb5-4232-b9d0-73764bed57df",
+                    "leftValue": "={{ $json.messageType }}",
+                    "rightValue": "video",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "video"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -384,
+        3472
+      ],
+      "id": "2ba233b1-a97e-468c-8ae6-84b82e43e045",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "jsCode": "// O node anterior substitui o $json pelo retorno da API do WhatsApp,\n// perdendo userMessage, categoria, etc. Restauramos os dados originais\n// lendo o nó \"Wait - Anti-spam 2s\" (saída única, executa em todos os\n// caminhos). NUNCA ler \"Switch - Formato de resposta\" aqui: em nós de\n// múltiplas saídas, $('...').first() só enxerga a primeira saída e\n// quebra quando a resposta sai pela saída de texto (fallback).\nconst original = $('Wait - Anti-spam 2s').first().json;\n\n// Se o TTS falhou e a resposta caiu no fallback de texto, registra isso\n// para o CRM logar o formato correto (\"texto (fallback TTS)\").\nlet ttsFalhou = false;\ntry {\n  ttsFalhou = $('Fallback TTS - Enviar texto').first().json.ttsFalhou === true;\n} catch (e) { /* fallback não executou nesta execução */ }\n\nreturn [{ json: { ...original, ttsFalhou } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7232,
+        608
+      ],
+      "id": "7231376a-c979-41db-8b0c-cb13f8d105aa",
+      "name": "Restaurar dados após enviar resposta",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v23.0/{{ $json.mediaId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -160,
+        3984
+      ],
+      "id": "fa7a6021-6ef3-47a1-bef8-921a87e30d35",
+      "name": "Mídia - Obter URL (vídeo)",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "c5A8oh1Pdcce2iix",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        64,
+        4048
+      ],
+      "id": "36ff126e-f628-4069-9843-e7f6bd75ee82",
+      "name": "Mídia - Baixar vídeo",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "c5A8oh1Pdcce2iix",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Garante que o arquivo binário tenha nome/extensão compatíveis com a API\n// Whisper da OpenAI, que detecta o formato pela extensão do nome do arquivo.\n// Mensagens de voz do WhatsApp chegam como audio/ogg (opus); vídeos como video/mp4.\nconst item = $input.first();\nconst bin = item.binary?.data;\nif (!bin) throw new Error('Nenhum arquivo de mídia recebido para transcrição.');\n\nconst mime = String(bin.mimeType || '').toLowerCase();\nlet ext = 'ogg';\nif (mime.includes('mpeg') || mime.includes('mp3')) ext = 'mp3';\nelse if (mime.startsWith('video/mp4')) ext = 'mp4';\nelse if (mime.includes('mp4') || mime.includes('m4a')) ext = 'm4a';\nelse if (mime.includes('webm')) ext = 'webm';\nelse if (mime.includes('wav')) ext = 'wav';\n\nbin.fileName = `midia-whatsapp.${ext}`;\nreturn [{ json: item.json, binary: item.binary }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        3648
+      ],
+      "id": "5f1326aa-e8ce-4115-bbd2-18e171ee9ec0",
+      "name": "Ajustar arquivo de mídia"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Converte o binário da imagem baixada em data URI base64,\n// formato aceito pela API de visão da OpenAI (a URL de mídia do WhatsApp\n// exige autenticação, então não pode ser passada diretamente à OpenAI).\nconst item = $input.first();\nconst buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\nif (!buffer || buffer.length === 0) throw new Error('Imagem baixada está vazia.');\nif (buffer.length > 15 * 1024 * 1024) throw new Error('Imagem muito grande para análise.');\n\nconst mimeType = item.binary?.data?.mimeType || 'image/jpeg';\nreturn [{ json: { imageDataUri: `data:${mimeType};base64,${buffer.toString('base64')}` } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        4560
+      ],
+      "id": "7947baed-2b67-48e0-886a-b574dff0b812",
+      "name": "Preparar imagem (base64)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// O nó de TTS devolve apenas o binário do áudio; aqui restauramos os dados\n// (to, phoneNumberId, resposta etc.) que estavam no item antes do TTS,\n// mantendo o binário para o envio via WhatsApp.\nconst original = $('Wait - Anti-spam 2s').first().json;\nconst binario = $input.first().binary;\nif (!binario?.data) throw new Error('TTS não retornou áudio.');\nreturn [{ json: { ...original }, binary: binario }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6784,
+        912
+      ],
+      "id": "ebfe0fe8-6757-4950-9b8d-81daa55ae495",
+      "name": "Preparar áudio para envio"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Se a geração do áudio (TTS) falhar por qualquer motivo, garante que o\n// usuário receba a resposta em texto em vez de ficar sem retorno.\nconst original = $('Wait - Anti-spam 2s').first().json;\nreturn [{ json: { ...original, respostaDeveSerAudio: false, ttsFalhou: true } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6784,
+        624
+      ],
+      "id": "4647dd20-289e-4017-b810-860c4f6e17de",
+      "name": "Fallback TTS - Enviar texto"
+    },
+    {
+      "parameters": {
+        "content": "## v3.4 — Mídia corrigida + resposta em áudio\n\n**Entrada (Switch de mídia):**\n- Áudio → baixa → Whisper transcreve → segue como texto (e marca que a resposta deve ser em áudio)\n- Vídeo → baixa → Whisper transcreve a fala do vídeo → segue como texto (resposta em texto)\n- Imagem → baixa → GPT-4o-mini Vision descreve/transcreve → segue como texto (legenda mantida)\n\n**Saída (Switch - Formato de resposta):**\n- Pergunta feita em áudio → resposta gerada em áudio (TTS gpt-4o-mini-tts, voz nova, MP3)\n- Se a resposta tiver link, o link também é enviado por escrito logo após o áudio\n- Se o TTS falhar, cai automaticamente para resposta em texto\n\n**Limites:** áudio/vídeo até 16 MB (WhatsApp) e 25 MB (Whisper). Formatos raros (AMR/3GP) podem falhar na transcrição.",
+        "height": 440,
+        "width": 560
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        5664,
+        2688
+      ],
+      "id": "992b4d08-3b05-4377-9004-039b7c83ebd7",
+      "name": "LEIA - v3.4 Mídia e Áudio"
+    },
+    {
+      "parameters": {
+        "jsCode": "// CRM: registra imediatamente cada mensagem recebida na aba LOG_ATENDIMENTOS,\n// ANTES de qualquer processamento (IA, mídia, envio). Assim nenhuma solicitação\n// se perde: se o fluxo falhar depois, a linha permanece com status \"Recebida\"\n// (ou \"Erro\") e a equipe consegue ver o que ficou sem resposta.\nconst d = $json;\n\nconst tipoLabel = {\n  text: 'texto', audio: 'áudio', image: 'imagem', video: 'vídeo',\n  button: 'botão', interactive: 'interativo', document: 'documento', sticker: 'figurinha'\n};\nconst placeholder = {\n  audio: '[áudio recebido - transcrição em processamento]',\n  image: '[imagem recebida - análise em processamento]',\n  video: '[vídeo recebido - transcrição em processamento]'\n};\n\nreturn [{\n  json: {\n    id_mensagem: d.messageId || `${d.from || 'desconhecido'}-${Date.now()}`,\n    timestamp_recebida: d.receivedAt || new Date().toISOString(),\n    data_hora: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),\n    numero_usuario: d.from || '',\n    nome_usuario: d.userName || '',\n    formato_recebido: tipoLabel[d.messageType] || d.messageType || '',\n    mensagem_recebida: d.userMessage || placeholder[d.messageType] || `[mensagem do tipo \"${d.messageType}\"]`,\n    status: 'Recebida'\n  }\n}];\n"
+      },
+      "id": "4324afe3-a81d-4def-8258-b29dd6972ef5",
+      "name": "CRM - Preparar registro de entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7456,
+        4800
+      ],
+      "notesInFlow": true,
+      "notes": "CRM: monta a linha inicial (status Recebida) assim que a mensagem chega."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1NDC8stBwdhc0yUNZNWNiEKHTrDEq5chQqIRP0WAc2RQ",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LOG_ATENDIMENTOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_mensagem": "={{ $json.id_mensagem }}",
+            "timestamp_recebida": "={{ $json.timestamp_recebida }}",
+            "data_hora": "={{ $json.data_hora }}",
+            "numero_usuario": "={{ $json.numero_usuario }}",
+            "nome_usuario": "={{ $json.nome_usuario }}",
+            "formato_recebido": "={{ $json.formato_recebido }}",
+            "mensagem_recebida": "={{ $json.mensagem_recebida }}",
+            "status": "={{ $json.status }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "f599bfe6-b151-485f-a9d5-6a97cc1e4415",
+      "name": "CRM - Registrar mensagem recebida",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        7680,
+        4800
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "notesInFlow": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nIfyEUF469O4ic3a",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "CRM: grava a linha da mensagem recebida. onError=continue para nunca travar o atendimento."
+    },
+    {
+      "parameters": {
+        "jsCode": "// CRM: captura falhas das etapas críticas (IA, mídia, envio WhatsApp) e\n// atualiza a linha da mensagem para status \"Erro\", com o nó e o motivo.\n// Sem isso, execuções com falha desaparecem sem deixar rastro na planilha.\nlet entrada = {};\ntry { entrada = $('Extrair dados da mensagem').first().json; } catch (e) { /* extração não rodou */ }\n\nconst err = $json.error || {};\nconst descricao = [err.name, err.message || $json.message]\n  .filter(Boolean).join(': ') || 'Erro não identificado';\nlet noOrigem = '';\ntry { noOrigem = $prevNode.name; } catch (e) { /* indisponível */ }\n\nreturn [{\n  json: {\n    id_mensagem: entrada.messageId || `${entrada.from || 'desconhecido'}-${Date.now()}`,\n    timestamp_recebida: entrada.receivedAt || '',\n    data_hora: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),\n    numero_usuario: entrada.from || '',\n    nome_usuario: entrada.userName || '',\n    mensagem_recebida: entrada.userMessage || '',\n    status: 'Erro',\n    erro: `[${noOrigem}] ${String(descricao).slice(0, 500)}`\n  }\n}];\n"
+      },
+      "id": "b009ccc0-0571-45ec-81bc-94cdf6e99e5a",
+      "name": "CRM - Preparar registro de erro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7456,
+        3344
+      ],
+      "notesInFlow": true,
+      "notes": "CRM: recebe a saída de erro dos nós críticos e monta a atualização da linha."
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1NDC8stBwdhc0yUNZNWNiEKHTrDEq5chQqIRP0WAc2RQ",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "LOG_ATENDIMENTOS",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_mensagem": "={{ $json.id_mensagem }}",
+            "timestamp_recebida": "={{ $json.timestamp_recebida }}",
+            "data_hora": "={{ $json.data_hora }}",
+            "numero_usuario": "={{ $json.numero_usuario }}",
+            "nome_usuario": "={{ $json.nome_usuario }}",
+            "mensagem_recebida": "={{ $json.mensagem_recebida }}",
+            "status": "={{ $json.status }}",
+            "erro": "={{ $json.erro }}"
+          },
+          "matchingColumns": [
+            "id_mensagem"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "5a414205-c3e9-4dd4-87aa-f10f30bf401f",
+      "name": "CRM - Registrar erro",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        7680,
+        3344
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "notesInFlow": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nIfyEUF469O4ic3a",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "CRM: marca a linha da mensagem como Erro (match por id_mensagem)."
+    },
+    {
+      "parameters": {
+        "content": "## CRM v3.5 - Controle de mensagens\n\n**Como funciona:**\n1. **Entrada**: toda mensagem recebida é registrada IMEDIATAMENTE na aba LOG_ATENDIMENTOS com status **Recebida** (antes de IA/mídia/envio).\n2. **Resposta**: após o envio, a MESMA linha (match por `id_mensagem`) é atualizada com resposta, categoria, tempos e status **Respondida**.\n3. **Erro**: falhas nos nós críticos atualizam a linha para status **Erro**, com o nó de origem e o motivo.\n\n**Leitura gerencial:**\n- status = Recebida → solicitação pendente/sem resposta (acompanhar!)\n- status = Erro → intervenção da equipe\n- encaminhamento_humano = Sim → atender manualmente\n\n**Antes de ativar:** execute `scripts/setup_crm_planilha.gs` na planilha para criar as colunas novas (id_mensagem, timestamps, formato, tempo de resposta) e o DASHBOARD_CRM.\n\n**⚠️ IMPORTANTE ao importar:** o v3.4 e o v3.5.x usam o MESMO path de webhook (`whatsapp-cecape-prod`). Desative/exclua as versões anteriores antes de ativar esta, senão as mensagens continuam caindo no fluxo antigo.\n\n**Alerta de falha de gravação:** se a planilha não puder ser gravada (coluna faltando, credencial), o administrador recebe o erro exato no WhatsApp.\n\n**v3.5.4:** resposta a áudio agora é SOMENTE áudio (sem texto complementar); correção do erro 'Cannot read properties of undefined' no Restaurar dados (leitura do Switch multi-saída); entrada do CRM em append puro.\n\n**v3.5.5:** contatos da base oficial são informados diretamente (sem 'não posso fornecer'); imagens fora de escopo têm o conteúdo reconhecido na resposta; tentativa experimental do indicador 'gravando áudio' (a Meta só documenta 'digitando').\n\n**v3.5.6:** nova aba 'Direção' incluída no corpo docente; perguntas sobre pessoas da equipe (nome, sobrenome, cargo) sempre classificam como corpo_docente.\n\n**v3.5.7:** e-mails são soletrados no áudio (arroba ésse cê ésse educa ponto com ponto bê erre); respostas a imagens sempre reconhecem o conteúdo recebido (feito em código).",
+        "height": 620,
+        "width": 420,
+        "color": 4
+      },
+      "id": "bc57568c-186c-4b11-8dd0-d5fa4722973b",
+      "name": "LEIA - CRM v3.5.7",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3568,
+        3680
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// CRM: uma gravação na planilha falhou (mesmo após 3 tentativas).\n// Monta um alerta com o erro exato e envia por WhatsApp ao administrador,\n// para que \"planilha não atualiza\" nunca seja silencioso.\nlet origem = '';\ntry { origem = $prevNode.name; } catch (e) { /* indisponível */ }\n\nconst err = $json.error || {};\nconst detalhe = [err.name, err.message || $json.message]\n  .filter(Boolean).join(': ') || JSON.stringify($json).slice(0, 300);\n\nlet entrada = {};\ntry { entrada = $('Extrair dados da mensagem').first().json; } catch (e) { /* extração não rodou */ }\n\nconst texto =\n`⚠️ CRM CECAPE - FALHA AO GRAVAR NA PLANILHA\n\nNó: ${origem}\nErro: ${String(detalhe).slice(0, 400)}\n\nMensagem de: ${entrada.from || '?'} ${entrada.userName ? '(' + entrada.userName + ')' : ''}\nTexto: ${String(entrada.userMessage || '').slice(0, 200)}\n\nVerifique, nesta ordem:\n1. A aba LOG_ATENDIMENTOS tem a coluna id_mensagem? (rode setupCRM no Apps Script)\n2. A credencial Google Sheets está válida?\n3. O ID da planilha no workflow é o da planilha correta?`;\n\nreturn [{\n  json: {\n    to: '5511993358259',\n    phoneNumberId: entrada.phoneNumberId || '1068905836312533',\n    resposta: texto\n  }\n}];\n"
+      },
+      "id": "bae261e6-9c87-49cf-bfe6-26aa4035451d",
+      "name": "CRM - Preparar alerta de gravação",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7904,
+        3344
+      ],
+      "notesInFlow": true,
+      "notes": "CRM: recebe a saída de erro dos nós de gravação e monta o alerta ao admin."
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "={{ $json.phoneNumberId || '1068905836312533' }}",
+        "recipientPhoneNumber": "={{ '+' + String($json.to) }}",
+        "textBody": "={{ $json.resposta }}",
+        "additionalFields": {}
+      },
+      "id": "63ce3907-8d88-49e2-80ad-293c6a315ad7",
+      "name": "CRM - Alertar admin (falha de gravação)",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        8128,
+        3344
+      ],
+      "notesInFlow": true,
+      "webhookId": "8f82d978-1886-45ba-a2fc-bdef1ebe428c",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "c5A8oh1Pdcce2iix",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "CRM: avisa o administrador no WhatsApp quando a planilha não pôde ser gravada."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "52b5bc91-5f7c-4a81-aaa4-826c7234a5db",
+              "leftValue": "={{ $('Extrair dados da mensagem').first().json.respostaDeveSerAudio === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c6954982-1697-4ff5-887c-7ba99be8307f",
+      "name": "IF - Resposta será áudio?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        1632
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $('Extrair dados da mensagem').first().json.phoneNumberId || '1068905836312533' }}/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: $('Extrair dados da mensagem').first().json.messageId, typing_indicator: { type: 'audio' } }) }}",
+        "options": {}
+      },
+      "id": "24faee84-cbb8-4719-9712-248c45b71fca",
+      "name": "WhatsApp - Indicador gravando (experimental)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1408,
+        1632
+      ],
+      "notesInFlow": true,
+      "credentials": {
+        "whatsAppApi": {
+          "id": "c5A8oh1Pdcce2iix",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "EXPERIMENTAL: a API oficial da Meta só documenta typing_indicator type 'text'. Tenta 'audio'; se a Meta rejeitar, o 'digitando' já enviado permanece e nada quebra."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1W1_v9ZcePVaezEoAEM9GxPlj0n9rJJLz-ofvb1OEDp4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Direção",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "e91bfeff-726d-428e-b591-0c47b463996d",
+      "name": "GSheets - Docente DIREÇÃO",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4768,
+        2672
+      ],
+      "notesInFlow": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nIfyEUF469O4ic3a",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "notes": "Aba fixa: GESTÃO. Lê a partir da linha 3 (cabeçalho real)."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook GET - Verificação Meta": {
+      "main": [
+        [
+          {
+            "node": "Validar GET Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar GET Meta": {
+      "main": [
+        [
+          {
+            "node": "Responder Verificação Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook POST - Mensagens WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Extrair dados da mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair dados da mensagem": {
+      "main": [
+        [
+          {
+            "node": "CRM - Preparar registro de entrada",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mídia - Obter URL (áudio)": {
+      "main": [
+        [
+          {
+            "node": "Mídia - Baixar áudio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM - Preparar registro de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mídia - Obter URL (imagem)": {
+      "main": [
+        [
+          {
+            "node": "Mídia - Baixar imagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM - Preparar registro de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Converter imagem em texto": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Ler contatos",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "WhatsApp - Mostrar digitando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - É texto?": {
+      "main": [
+        [
+          {
+            "node": "CONFIG - Agente Master",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resposta - Tipo não suportado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CONFIG - Agente Master": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Ler log recente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente Master - Classificar intenção": {
+      "main": [
+        [
+          {
+            "node": "Parse Classificação IA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM - Preparar registro de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Classificação IA": {
+      "main": [
+        [
+          {
+            "node": "IF - Modo diagnóstico?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Modo diagnóstico?": {
+      "main": [
+        [
+          {
+            "node": "Preparar resposta diagnóstico",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF - Tem resposta direta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar resposta diagnóstico": {
+      "main": [
+        [
+          {
+            "node": "Wait - Anti-spam 2s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Tem resposta direta?": {
+      "main": [
+        [
+          {
+            "node": "Preparar resposta direta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mapear aba da base oficial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar resposta direta": {
+      "main": [
+        [
+          {
+            "node": "IA - Variar resposta direta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mapear aba da base oficial": {
+      "main": [
+        [
+          {
+            "node": "IF - É categoria cursos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Ler base oficial": {
+      "main": [
+        [
+          {
+            "node": "Filtrar registros ativos e montar contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar registros ativos e montar contexto": {
+      "main": [
+        [
+          {
+            "node": "Unificar contexto (cursos ou base oficial)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IA - Agente Especialista": {
+      "main": [
+        [
+          {
+            "node": "Preparar resposta especialista",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM - Preparar registro de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar resposta especialista": {
+      "main": [
+        [
+          {
+            "node": "Wait - Anti-spam 2s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resposta - Tipo não suportado": {
+      "main": [
+        [
+          {
+            "node": "Wait - Anti-spam 2s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait - Anti-spam 2s": {
+      "main": [
+        [
+          {
+            "node": "Switch - Formato de resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp - Enviar áudio": {
+      "main": [
+        [
+          {
+            "node": "Restaurar dados após enviar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM - Preparar registro de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp - Enviar resposta": {
+      "main": [
+        [
+          {
+            "node": "Restaurar dados após enviar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM - Preparar registro de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - É categoria cursos?": {
+      "main": [
+        [
+          {
+            "node": "Calcular mês seguinte",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF - É categoria corpo docente?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular mês seguinte": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Ler cursos do mês",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Ler cursos do mês": {
+      "main": [
+        [
+          {
+            "node": "Montar contexto de cursos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar contexto de cursos": {
+      "main": [
+        [
+          {
+            "node": "Unificar contexto (cursos ou base oficial)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unificar contexto (cursos ou base oficial)": {
+      "main": [
+        [
+          {
+            "node": "IA - Agente Especialista",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Ler log recente": {
+      "main": [
+        [
+          {
+            "node": "Montar histórico da conversa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar histórico da conversa": {
+      "main": [
+        [
+          {
+            "node": "Agente Master - Classificar intenção",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IA - Variar resposta direta": {
+      "main": [
+        [
+          {
+            "node": "Preparar resposta direta final",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM - Preparar registro de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar resposta direta final": {
+      "main": [
+        [
+          {
+            "node": "Wait - Anti-spam 2s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Ler contatos": {
+      "main": [
+        [
+          {
+            "node": "Identificar contato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Identificar contato": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Salvar contato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Salvar contato": {
+      "main": [
+        [
+          {
+            "node": "Restaurar dados após salvar contato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Precisa se apresentar?": {
+      "main": [
+        [
+          {
+            "node": "Preparar apresentação inicial",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF - É resposta com o nome?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar apresentação inicial": {
+      "main": [
+        [
+          {
+            "node": "Wait - Anti-spam 2s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - É resposta com o nome?": {
+      "main": [
+        [
+          {
+            "node": "Preparar confirmação de nome",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF - É texto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar confirmação de nome": {
+      "main": [
+        [
+          {
+            "node": "Wait - Anti-spam 2s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restaurar dados após salvar contato": {
+      "main": [
+        [
+          {
+            "node": "IF - Precisa se apresentar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - É categoria corpo docente?": {
+      "main": [
+        [
+          {
+            "node": "GSheets - Docente INFANTIL",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "GSheets - Docente INICIAIS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "GSheets - Docente FINAIS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "GSheets - Docente PROJETOS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "GSheets - Docente GESTÃO",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "GSheets - Docente DIREÇÃO",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets - Ler base oficial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar contexto de corpo docente": {
+      "main": [
+        [
+          {
+            "node": "Unificar contexto (cursos ou base oficial)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSheets - Docente INFANTIL": {
+      "main": [
+        [
+          {
+            "node": "Unificar leitura corpo docente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSheets - Docente INICIAIS": {
+      "main": [
+        [
+          {
+            "node": "Unificar leitura corpo docente",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "GSheets - Docente FINAIS": {
+      "main": [
+        [
+          {
+            "node": "Unificar leitura corpo docente",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "GSheets - Docente PROJETOS": {
+      "main": [
+        [
+          {
+            "node": "Unificar leitura corpo docente",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "GSheets - Docente GESTÃO": {
+      "main": [
+        [
+          {
+            "node": "Unificar leitura corpo docente",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Unificar leitura corpo docente": {
+      "main": [
+        [
+          {
+            "node": "Montar contexto de corpo docente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Mídia - Obter URL (áudio)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mídia - Obter URL (imagem)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mídia - Obter URL (vídeo)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets - Ler contatos",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "WhatsApp - Mostrar digitando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - Formato de resposta": {
+      "main": [
+        [
+          {
+            "node": "OpenAI - Gerar áudio (TTS)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "WhatsApp - Enviar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restaurar dados após enviar resposta": {
+      "main": [
+        [
+          {
+            "node": "CRM - Preparar registro de resposta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM - Preparar registro de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mídia - Baixar áudio": {
+      "main": [
+        [
+          {
+            "node": "Ajustar arquivo de mídia",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM - Preparar registro de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mídia - Obter URL (vídeo)": {
+      "main": [
+        [
+          {
+            "node": "Mídia - Baixar vídeo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM - Preparar registro de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mídia - Baixar vídeo": {
+      "main": [
+        [
+          {
+            "node": "Ajustar arquivo de mídia",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM - Preparar registro de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ajustar arquivo de mídia": {
+      "main": [
+        [
+          {
+            "node": "OpenAI - Transcrever áudio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Transcrever áudio": {
+      "main": [
+        [
+          {
+            "node": "Converter transcrição em texto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM - Preparar registro de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Converter transcrição em texto": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Ler contatos",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "WhatsApp - Mostrar digitando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mídia - Baixar imagem": {
+      "main": [
+        [
+          {
+            "node": "Preparar imagem (base64)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM - Preparar registro de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar imagem (base64)": {
+      "main": [
+        [
+          {
+            "node": "OpenAI - Analisar imagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Analisar imagem": {
+      "main": [
+        [
+          {
+            "node": "Converter imagem em texto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM - Preparar registro de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Gerar áudio (TTS)": {
+      "main": [
+        [
+          {
+            "node": "Preparar áudio para envio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fallback TTS - Enviar texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar áudio para envio": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp - Enviar áudio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallback TTS - Enviar texto": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp - Enviar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM - Preparar registro de resposta": {
+      "main": [
+        [
+          {
+            "node": "CRM - Atualizar registro (respondida)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM - Preparar registro de entrada": {
+      "main": [
+        [
+          {
+            "node": "CRM - Registrar mensagem recebida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM - Preparar registro de erro": {
+      "main": [
+        [
+          {
+            "node": "CRM - Registrar erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM - Preparar alerta de gravação": {
+      "main": [
+        [
+          {
+            "node": "CRM - Alertar admin (falha de gravação)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM - Registrar mensagem recebida": {
+      "main": [
+        [],
+        [
+          {
+            "node": "CRM - Preparar alerta de gravação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM - Registrar erro": {
+      "main": [
+        [],
+        [
+          {
+            "node": "CRM - Preparar alerta de gravação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM - Atualizar registro (respondida)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "CRM - Preparar alerta de gravação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp - Mostrar digitando": {
+      "main": [
+        [
+          {
+            "node": "IF - Resposta será áudio?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Resposta será áudio?": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp - Indicador gravando (experimental)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSheets - Docente DIREÇÃO": {
+      "main": [
+        [
+          {
+            "node": "Unificar leitura corpo docente",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "0f3e1010-1942-4b2d-aaa4-423d6c992f82",
+  "meta": {
+    "instanceId": "9064fe32635d2fcaca845aac95e526c58baa32ac68be71412291cb0f1d193974"
+  },
+  "id": "C6849PPLzwPa0iIt",
+  "tags": []
+}
