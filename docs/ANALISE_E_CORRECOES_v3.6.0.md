@@ -145,3 +145,9 @@ Correção: `Calcular mês seguinte` gera um único item com a lista de meses e 
 Testes de mesa com a planilha real: setembro → 35 registrados, 18 listados, 12 mil caracteres; outubro+novembro+dezembro → 69 registrados, 66 listados.
 
 Os demais nós Google Sheets (contatos, log, base oficial, corpo docente) continuam no nó nativo. Se o mesmo sintoma aparecer neles (histórico que "esquece", contato não reconhecido, corpo docente com uma pessoa só), a mesma troca por HTTP Request resolve. Confira a versão do n8n em Settings; se for 2.3x, o bug se aplica.
+
+## 10. v3.6.4: "em novembro?" repetia o valor de setembro
+
+Evidência na coluna `erro` do LOG (diagnóstico da v3.6.3): "quantos cursos tiveram no mês de set?" → `aba=CURSOS PRESENCIAIS (SETEMBRO); lidos=35` e resposta correta (35). Em seguida "em novembro?" → categoria `agenda_cronograma`, `aba=AGENDA_CRONOGRAMA; lidos=1` (linha de exemplo), e o especialista respondeu "Em novembro, teremos 35 cursos", copiando o número do histórico da conversa. Mesmo comportamento com "em ago".
+
+Correções: (1) `Parse Classificação IA` reconhece continuação só com mês/período após conversa de cursos e força a categoria de cursos com a modalidade do histórico; (2) `Calcular mês seguinte` usa primeiro os meses da mensagem atual; (3) prompt do especialista com a regra de nunca reaproveitar dados do histórico; (4) prompt do classificador com a mesma orientação. Testes de mesa: 7 cenários de continuação, incluindo certificados e corpo docente, que não devem ser capturados.

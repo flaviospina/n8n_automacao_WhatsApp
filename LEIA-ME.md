@@ -6,9 +6,10 @@ Workflow do atendimento automático do CECAPE via WhatsApp Cloud API, com Agente
 
 ```
 workflows/
-  WhatsApp_IA_CECAPE_v3.6.3.json      <- versão atual (importar esta)
+  WhatsApp_IA_CECAPE_v3.6.4.json      <- versão atual (importar esta)
   anterior/
-    WhatsApp_IA_CECAPE_v3.6.2.json    <- versões anteriores, só para comparação
+    WhatsApp_IA_CECAPE_v3.6.3.json    <- versões anteriores, só para comparação
+    WhatsApp_IA_CECAPE_v3.6.2.json
     WhatsApp_IA_CECAPE_v3.6.1.json
     WhatsApp_IA_CECAPE_v3.6.0.json
     WhatsApp_IA_CECAPE_v3.5.7.json
@@ -18,13 +19,19 @@ scripts/
   setup_crm_planilha.gs               <- Apps Script único: colunas, dashboard e arquivamento do LOG
 ```
 
-## Como publicar a v3.6.3 (sem terminal)
+## Como publicar a v3.6.4 (sem terminal)
 
-1. No n8n, **Workflows > Import from File** e escolha `workflows/WhatsApp_IA_CECAPE_v3.6.3.json`.
+1. No n8n, **Workflows > Import from File** e escolha `workflows/WhatsApp_IA_CECAPE_v3.6.4.json`.
 2. Abra os nós com credencial e confirme que estão selecionadas: WhatsApp account (nós WhatsApp e Mídia), OpenAI - CECAPE - New (nós OpenAI/IA), Google Sheets account 2 (nós Google Sheets). O nó novo `WhatsApp - Aviso de erro ao usuário` usa a mesma credencial do WhatsApp.
-3. Salve. **Desative** qualquer versão anterior (mesmo path `whatsapp-cecape-prod`). Ative o v3.6.3.
+3. Salve. **Desative** qualquer versão anterior (mesmo path `whatsapp-cecape-prod`). Ative o v3.6.4.
 4. Na planilha oficial, Extensões > Apps Script: substitua o script antigo por `scripts/setup_crm_planilha.gs`, execute `setupCRM` e depois `criarGatilhoDiario` uma vez.
 5. Faça os testes da seção 6 de `docs/ANALISE_E_CORRECOES_v3.6.0.md`.
+
+## O que mudou na v3.6.4
+
+- Continuação só com mês ou período ("em novembro?", "em ago", "e o mês que vem?") logo após uma conversa sobre cursos herda a categoria de cursos e a modalidade já informada. Antes o classificador mandava para `agenda_cronograma`, lia outra aba e o especialista repetia o número da resposta anterior.
+- `Calcular mês seguinte` prioriza os meses escritos na mensagem atual; só usa a reescrita do classificador quando a mensagem não cita mês.
+- Especialista proibido de reaproveitar números, datas ou listas do histórico: responde só com a base desta mensagem e diz quando não encontrou.
 
 ## O que mudou na v3.6.3
 
