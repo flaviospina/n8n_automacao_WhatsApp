@@ -103,3 +103,19 @@ Fontes: [Deprecations OpenAI](https://developers.openai.com/api/docs/deprecation
 5. Envie uma **imagem** com legenda. Esperado: resposta reconhecendo a imagem.
 6. Reaja com emoji a uma mensagem do bot. Esperado: nenhuma resposta.
 7. Para simular falha, troque temporariamente o ID da planilha em `Google Sheets - Ler contatos`. Esperado: a execução segue, a pessoa recebe a mensagem de erro seguro e o admin recebe o alerta.
+
+## 7. v3.6.1: roteamento de cursos por modalidade
+
+| Pergunta do usuário | Categoria final | Base consultada |
+|---|---|---|
+| Menciona cursos **on-line**, EAD, a distância, remoto, virtual, pela plataforma, AutoriaSCS | `autoriascs_plataforma` | Planilha oficial `1NDC8st...`, aba AUTORIASCS_PLATAFORMA |
+| Menciona cursos **presenciais** | `cursos_formacoes` | Planilha de cursos `11_isrd...`, abas por mês (do mês seguinte até dezembro) |
+| Menciona cursos **sem modalidade** | `cursos_formacoes` com resposta direta | Nenhuma: o bot pergunta "presencial ou on-line?" |
+| Responde só "presencial" ou "on-line" logo após essa pergunta | Conforme a resposta | A pergunta original é recuperada do histórico e enviada ao especialista |
+| Pergunta de continuação ("e a carga horária?") em conversa que já definiu a modalidade | Conforme a modalidade anterior | Idem, sem perguntar de novo |
+| Acesso/login à plataforma, sem a palavra curso | `autoriascs_plataforma` | Sem alteração |
+| Inscrições, certificados, corpo docente etc. | Inalterado | Inalterado |
+
+A regra está no prompt do classificador (campo novo `modalidade_curso` e regra 8) e, por segurança, em código no nó `Parse Classificação IA`, que prevalece sobre a IA. A mensagem da pergunta de modalidade fica em `CONFIG - Agente Master` (`mensagens.modalidade_curso`). O contexto de cursos presenciais passa a ser rotulado como PRESENCIAL para o especialista, que foi instruído a dizer a modalidade dos cursos listados.
+
+Testes de mesa executados sobre a lógica do nó (10 cenários, todos com o resultado esperado): pergunta genérica, on-line, presencial, resposta curta "online", resposta curta "Presencial", continuação com modalidade no histórico, corpo docente, acesso à plataforma, inscrições e "formação EAD".
