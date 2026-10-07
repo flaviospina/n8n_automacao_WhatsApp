@@ -119,3 +119,17 @@ Fontes: [Deprecations OpenAI](https://developers.openai.com/api/docs/deprecation
 A regra está no prompt do classificador (campo novo `modalidade_curso` e regra 8) e, por segurança, em código no nó `Parse Classificação IA`, que prevalece sobre a IA. A mensagem da pergunta de modalidade fica em `CONFIG - Agente Master` (`mensagens.modalidade_curso`). O contexto de cursos presenciais passa a ser rotulado como PRESENCIAL para o especialista, que foi instruído a dizer a modalidade dos cursos listados.
 
 Testes de mesa executados sobre a lógica do nó (10 cenários, todos com o resultado esperado): pergunta genérica, on-line, presencial, resposta curta "online", resposta curta "Presencial", continuação com modalidade no histórico, corpo docente, acesso à plataforma, inscrições e "formação EAD".
+
+## 8. v3.6.2: meses consultados na planilha de cursos presenciais
+
+Sintoma: "quantos cursos tiveram em setembro?" respondia que não havia cursos, com 35 linhas na aba SETEMBRO. Causa: `Calcular mês seguinte` lia do mês seguinte até dezembro (em outubro: NOVEMBRO e DEZEMBRO), então SETEMBRO nunca entrava no contexto, e o limite de 12 mil caracteres cortaria a lista mesmo se entrasse.
+
+| Pergunta | Abas lidas |
+|---|---|
+| cita um ou mais meses (nome completo ou abreviação isolada: "set", "out") | exatamente esses meses |
+| "este mês", "mês atual" | mês atual |
+| "mês que vem", "próximo mês" | mês seguinte |
+| "ano todo", "todos os meses", "no ano" | janeiro a dezembro |
+| sem mês | do mês atual até dezembro |
+
+O contexto passa a abrir com `MESES CONSULTADOS` e um `RESUMO` com a quantidade de cursos por mês (contagem de linhas com dados a partir da linha 2, respeitando a coluna DIVULGAR quando existir). O especialista foi instruído a usar esse resumo para perguntas de quantidade e a avisar quando o mês perguntado não estiver entre os consultados. Testes de mesa: 11 frases, todas com as abas esperadas.

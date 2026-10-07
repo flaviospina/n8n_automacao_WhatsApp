@@ -6,9 +6,10 @@ Workflow do atendimento automático do CECAPE via WhatsApp Cloud API, com Agente
 
 ```
 workflows/
-  WhatsApp_IA_CECAPE_v3.6.1.json      <- versão atual (importar esta)
+  WhatsApp_IA_CECAPE_v3.6.2.json      <- versão atual (importar esta)
   anterior/
-    WhatsApp_IA_CECAPE_v3.6.0.json    <- versões anteriores, só para comparação
+    WhatsApp_IA_CECAPE_v3.6.1.json    <- versões anteriores, só para comparação
+    WhatsApp_IA_CECAPE_v3.6.0.json
     WhatsApp_IA_CECAPE_v3.5.7.json
 docs/
   ANALISE_E_CORRECOES_v3.6.0.md       <- diagnóstico completo, checklist e prazos da OpenAI
@@ -16,13 +17,19 @@ scripts/
   setup_crm_planilha.gs               <- Apps Script único: colunas, dashboard e arquivamento do LOG
 ```
 
-## Como publicar a v3.6.1 (sem terminal)
+## Como publicar a v3.6.2 (sem terminal)
 
-1. No n8n, **Workflows > Import from File** e escolha `workflows/WhatsApp_IA_CECAPE_v3.6.1.json`.
+1. No n8n, **Workflows > Import from File** e escolha `workflows/WhatsApp_IA_CECAPE_v3.6.2.json`.
 2. Abra os nós com credencial e confirme que estão selecionadas: WhatsApp account (nós WhatsApp e Mídia), OpenAI - CECAPE - New (nós OpenAI/IA), Google Sheets account 2 (nós Google Sheets). O nó novo `WhatsApp - Aviso de erro ao usuário` usa a mesma credencial do WhatsApp.
-3. Salve. **Desative** qualquer versão anterior (mesmo path `whatsapp-cecape-prod`). Ative o v3.6.1.
+3. Salve. **Desative** qualquer versão anterior (mesmo path `whatsapp-cecape-prod`). Ative o v3.6.2.
 4. Na planilha oficial, Extensões > Apps Script: substitua o script antigo por `scripts/setup_crm_planilha.gs`, execute `setupCRM` e depois `criarGatilhoDiario` uma vez.
 5. Faça os testes da seção 6 de `docs/ANALISE_E_CORRECOES_v3.6.0.md`.
+
+## O que mudou na v3.6.2
+
+- Cursos presenciais: o nó `Calcular mês seguinte` lê o(s) mês(es) citado(s) na pergunta ("setembro", "em out", "outubro e novembro", "ano todo", "mês que vem"). Sem mês citado, lê do **mês atual** até dezembro (antes começava no mês seguinte, por isso "setembro" nunca era consultado em outubro).
+- O contexto do especialista traz a contagem de cursos por mês (uma linha por curso na aba, a partir da linha 2), para responder "quantos cursos em X".
+- Limite do contexto de cursos subiu de 12 mil para 40 mil caracteres (35 cursos de um mês não cabiam).
 
 ## O que mudou na v3.6.1
 
